@@ -1,4 +1,11 @@
 import * as THREE from 'three';
+import { skyState } from './astro/engine.js';
+import { mulMV } from './astro/vec.js';
+import { clock } from './sim/clock.js';
+import { SITES } from './sites.js';
+import { createStarfield, starNameMagCut } from './scene/starfield.js';
+import { createPlanets } from './scene/planets.js';
+import { createLabelLayer } from './scene/labels2d.js';
 
 // Scene coordinate convention (local horizon frame at the observer):
 //   +X = East, +Y = Up (zenith), -Z = North  (so +Z = South)
@@ -128,8 +135,30 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 // ---------------------------------------------------------------------------
-// Placeholder scene content (replaced by real terrain/sky in later tasks).
+// Interim keyboard controls (replaced by real UI in the controls task):
+// time-lapse speeds, sky-layer toggles.
 // ---------------------------------------------------------------------------
+const SPEEDS = { Digit1: 1, Digit2: 60, Digit3: 3600, Digit4: 86400, Digit5: 604800 };
+const toggles = { constellations: true, starNames: true };
+
+window.addEventListener('keydown', (e) => {
+  if (SPEEDS[e.code]) clock.setSpeed(SPEEDS[e.code]);
+  if (e.code === 'Digit0') clock.resetToRealTime();
+  if (e.code === 'KeyC') {
+    toggles.constellations = !toggles.constellations;
+    starfield?.showConstellations(toggles.constellations);
+  }
+  if (e.code === 'KeyN') {
+    toggles.starNames = !toggles.starNames;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Scene content
+// ---------------------------------------------------------------------------
+const site = SITES[0]; // Apollo 11 until the location picker task
+
+// Placeholder ground (replaced by real LOLA terrain in the terrain task).
 const ground = new THREE.Mesh(
   new THREE.CircleGeometry(5000, 96),
   new THREE.MeshStandardMaterial({ color: 0x5a5a5a, roughness: 1.0, metalness: 0.0 }),
@@ -137,10 +166,24 @@ const ground = new THREE.Mesh(
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-const sunLight = new THREE.DirectionalLight(0xfff5ec, 2.0);
-sunLight.position.set(1000, 800, -400);
+// Interim lighting driven by the real Sun position (full rig lands with the
+// sun-and-lighting task).
+const sunLight = new THREE.DirectionalLight(0xfff5ec, 0);
 scene.add(sunLight);
-scene.add(new THREE.AmbientLight(0xffffff, 0.02));
+const fillLight = new THREE.AmbientLight(0xdfe8ff, 0.08);
+scene.add(fillLight);
+
+let starfield = null;
+let planets = null;
+const labelLayer = createLabelLayer(app);
+
+const ready = (async () => {
+  starfield = await createStarfield(renderer.getPixelRatio());
+  planets = createPlanets(renderer.getPixelRatio());
+  scene.add(starfield.group);
+  scene.add(planets.group);
+})();
+ready.catch((err) => console.error('sky init failed:', err));
 
 // ---------------------------------------------------------------------------
 // Loop
@@ -174,8 +217,75 @@ function frame() {
   } else {
     look.fov = look.fovTarget;
   }
+  applyLook(); // camera matrices must be current before label projection
 
-  applyLook();
+  const state = skyState(clock.now(), site);
+  const sunUp = THREE.MathUtils.smoothstep(state.sun.alt, -0.5, 1.5);
+  const skyDim = 1 - 0.9 * sunUp;
+  const heightPx = renderer.domElement.clientHeight;
+
+  const labelItems = [];
+  if (starfield) {
+    starfield.setOrientation(state.eqjToScene);
+    starfield.updateApparentSizes(look.fov, heightPx);
+    starfield.setDim(skyDim);
+
+    const m = state.eqjToScene;
+    if (toggles.starNames) {
+      const cut = starNameMagCut(look.fov);
+      for (const s of starfield.namedStars) {
+        if (s.mag > cut) break; // sorted brightest-first
+        labelItems.push({
+          id: s.id,
+          dir: mulMV(m, s.vEqj),
+          text: s.name,
+          cls: 'star',
+          priority: 100 + s.mag * 10,
+        });
+      }
+    }
+    if (toggles.constellations) {
+      for (const c of starfield.constellations) {
+        labelItems.push({
+          id: c.id,
+          dir: mulMV(m, c.anchorEqj),
+          text: c.name,
+          cls: 'const',
+          priority: 300 + c.rank * 30,
+        });
+      }
+    }
+  }
+  if (planets) {
+    planets.update(state.planets);
+    planets.updateApparentSizes(look.fov, heightPx);
+    planets.setDim(skyDim);
+    const zoom = THREE.MathUtils.clamp(
+      heightPx / (2 * Math.tan(look.fov * Math.PI / 360)) / 565, 0.85, 4.0,
+    );
+    for (const p of state.planets) {
+      if (p.alt < -0.5) continue;
+      const sizeCss = THREE.MathUtils.clamp(13 * Math.pow(0.74, p.mag) * zoom, 1.8, 30);
+      labelItems.push({
+        id: p.name,
+        dir: p.sceneDir,
+        text: p.name,
+        cls: 'planet',
+        priority: p.mag,
+        ring: sizeCss / 2 + 5,
+      });
+    }
+  }
+  labelLayer.setDim(Math.pow(skyDim, 0.7));
+  labelLayer.render(camera, labelItems, dt * 1000);
+
+  sunLight.intensity = 3.0 * sunUp;
+  sunLight.position.set(
+    state.sun.sceneDir[0] * 2000,
+    state.sun.sceneDir[1] * 2000,
+    state.sun.sceneDir[2] * 2000,
+  );
+
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
