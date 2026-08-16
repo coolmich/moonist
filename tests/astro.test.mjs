@@ -99,6 +99,28 @@ test('earth sceneMatrix points the sub-lunar surface point back at the observer'
   assert.ok(dot > Math.cos(1.5 * Math.PI / 180), `alignment ${Math.acos(Math.min(1, dot)) * 180 / Math.PI}° off`);
 });
 
+test('Earth eclipses the Sun exactly when Earth sees a total lunar eclipse', () => {
+  // A total lunar eclipse from Earth is a total solar eclipse from the Moon.
+  let ecl = Astronomy.SearchLunarEclipse(new Date('2026-01-01T00:00:00Z'));
+  while (ecl.kind !== 'total') ecl = Astronomy.NextLunarEclipse(ecl.peak);
+  const site = { lat: 0.674, lon: 23.473 }; // Apollo 11, Earth-facing
+  const atPeak = skyState(ecl.peak.date, site);
+  assert.ok(atPeak.eclipseFraction > 0.999,
+    `total eclipse at ${ecl.peak.date.toISOString()} gave ${atPeak.eclipseFraction}`);
+  // Sunlight is fully blocked, and the Sun's disc sits behind Earth's.
+  const dayBefore = skyState(new Date(ecl.peak.date.getTime() - 86400000), site);
+  assert.equal(dayBefore.eclipseFraction, 0);
+  // Half the umbral duration later it must be partial or over, never > 1.
+  const later = skyState(new Date(ecl.peak.date.getTime() + 3 * 3600000), site);
+  assert.ok(later.eclipseFraction >= 0 && later.eclipseFraction <= 1);
+});
+
+test('no eclipse at full Moon phases that are not eclipses', () => {
+  // 2026-08-15 is nowhere near an eclipse.
+  const s = skyState(new Date(fixture.geocentric.t), SITES.siteA);
+  assert.equal(s.eclipseFraction, 0);
+});
+
 test('planets present with sane magnitudes', () => {
   const s = skyState(new Date(fixture.geocentric.t), SITES.siteA);
   const names = s.planets.map((p) => p.name);

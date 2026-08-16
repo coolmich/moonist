@@ -6,25 +6,35 @@ import { SITES } from './sites.js';
 import { createStarfield, starNameMagCut } from './scene/starfield.js';
 import { createPlanets } from './scene/planets.js';
 import { createLabelLayer } from './scene/labels2d.js';
+import { createEarth } from './scene/earth.js';
+import { createSun } from './scene/sun.js';
+import { createTerrain } from './scene/terrain.js';
+import { createLighting } from './scene/lighting.js';
 
 // Scene coordinate convention (local horizon frame at the observer):
 //   +X = East, +Y = Up (zenith), -Z = North  (so +Z = South)
 // Azimuth is measured from North, positive toward East.
 
 const app = document.getElementById('app');
+const EYE_HEIGHT = 1.7;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000); // vacuum: pitch black
 
-const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.05, 2e6);
-camera.position.set(0, 1.7, 0); // eye height above the regolith
+// near = 0.5: nothing is closer than the ~1.7 m eye height, and a larger near
+// plane keeps depth precision sane out to the 900 km star dome so the Earth
+// occludes stars and the terrain occludes the sky without z-fighting.
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.5, 2e6);
+camera.position.set(0, EYE_HEIGHT, 0);
 
 // ---------------------------------------------------------------------------
 // Look controls: drag the sky (the grabbed point tracks the cursor exactly),
@@ -135,8 +145,7 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 // ---------------------------------------------------------------------------
-// Interim keyboard controls (replaced by real UI in the controls task):
-// time-lapse speeds, sky-layer toggles.
+// Interim keyboard controls (the real UI lands with the controls task).
 // ---------------------------------------------------------------------------
 const SPEEDS = { Digit1: 1, Digit2: 60, Digit3: 3600, Digit4: 86400, Digit5: 604800 };
 const toggles = { constellations: true, starNames: true };
@@ -156,34 +165,73 @@ window.addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------------------
 // Scene content
 // ---------------------------------------------------------------------------
-const site = SITES[0]; // Apollo 11 until the location picker task
-
-// Placeholder ground (replaced by real LOLA terrain in the terrain task).
-const ground = new THREE.Mesh(
-  new THREE.CircleGeometry(5000, 96),
-  new THREE.MeshStandardMaterial({ color: 0x5a5a5a, roughness: 1.0, metalness: 0.0 }),
-);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
-
-// Interim lighting driven by the real Sun position (full rig lands with the
-// sun-and-lighting task).
-const sunLight = new THREE.DirectionalLight(0xfff5ec, 0);
-scene.add(sunLight);
-const fillLight = new THREE.AmbientLight(0xdfe8ff, 0.08);
-scene.add(fillLight);
+let site = SITES[0]; // Apollo 11 until the location picker lands
 
 let starfield = null;
 let planets = null;
+let earth = null;
+let sun = null;
+let terrain = null;
 const labelLayer = createLabelLayer(app);
+const lighting = createLighting(scene, renderer);
+
+async function setSite(next) {
+  site = next;
+  const built = await createTerrain(site);
+  if (terrain) {
+    scene.remove(terrain.group);
+    terrain.group.geometry.dispose();
+    terrain.group.material.dispose();
+  }
+  terrain = built;
+  scene.add(terrain.group);
+}
 
 const ready = (async () => {
-  starfield = await createStarfield(renderer.getPixelRatio());
+  const [sf, e] = await Promise.all([
+    createStarfield(renderer.getPixelRatio()),
+    createEarth(renderer),
+    setSite(site),
+  ]);
+  starfield = sf;
+  earth = e;
   planets = createPlanets(renderer.getPixelRatio());
+  sun = createSun();
   scene.add(starfield.group);
   scene.add(planets.group);
+  scene.add(earth.group);
+  scene.add(sun.group);
 })();
-ready.catch((err) => console.error('sky init failed:', err));
+ready.catch((err) => console.error('scene init failed:', err));
+
+// View API: used by the UI to swing the camera onto a target (the Earth
+// indicator, the Sun), and by automated checks to aim precisely.
+let latestState = null;
+const view = {
+  lookAt(azDeg, altDeg, fovDeg) {
+    const target = THREE.MathUtils.degToRad(azDeg);
+    // Take the shortest way round.
+    let d = ((target - look.az + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    look.az += d;
+    look.alt = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(altDeg), ALT_MIN, ALT_MAX);
+    look.vAz = 0;
+    look.vAlt = 0;
+    if (fovDeg) look.fovTarget = THREE.MathUtils.clamp(fovDeg, FOV_MIN, FOV_MAX);
+    applyLook();
+  },
+  get look() {
+    return { az: THREE.MathUtils.radToDeg(look.az), alt: THREE.MathUtils.radToDeg(look.alt), fov: look.fov };
+  },
+  get state() {
+    return latestState;
+  },
+  get site() {
+    return site;
+  },
+  setSite,
+  clock,
+};
+window.moonist = view;
 
 // ---------------------------------------------------------------------------
 // Loop
@@ -220,51 +268,53 @@ function frame() {
   applyLook(); // camera matrices must be current before label projection
 
   const state = skyState(clock.now(), site);
-  const sunUp = THREE.MathUtils.smoothstep(state.sun.alt, -0.5, 1.5);
-  const skyDim = 1 - 0.9 * sunUp;
+  latestState = state;
+  const { starDim, earthBrightness, uiDim } = lighting.update(state, dt);
   const heightPx = renderer.domElement.clientHeight;
+
+  // Sky labels are hidden behind the terrain skyline (a 4.5 km massif must
+  // occlude the names of everything behind it, whole-label, never sliced).
+  const horizonAlt = terrain
+    ? (dir) => terrain.horizonAlt(Math.atan2(dir[0], -dir[2]))
+    : () => 0;
+  const aboveSkyline = (dir) => {
+    const h = Math.hypot(dir[0], dir[2]);
+    return Math.atan2(dir[1], h) > horizonAlt(dir) + 0.004;
+  };
 
   const labelItems = [];
   if (starfield) {
     starfield.setOrientation(state.eqjToScene);
     starfield.updateApparentSizes(look.fov, heightPx);
-    starfield.setDim(skyDim);
+    starfield.setDim(starDim);
 
     const m = state.eqjToScene;
     if (toggles.starNames) {
       const cut = starNameMagCut(look.fov);
       for (const s of starfield.namedStars) {
         if (s.mag > cut) break; // sorted brightest-first
-        labelItems.push({
-          id: s.id,
-          dir: mulMV(m, s.vEqj),
-          text: s.name,
-          cls: 'star',
-          priority: 100 + s.mag * 10,
-        });
+        const dir = mulMV(m, s.vEqj);
+        if (!aboveSkyline(dir)) continue;
+        labelItems.push({ id: s.id, dir, text: s.name, cls: 'star', priority: 100 + s.mag * 10 });
       }
     }
     if (toggles.constellations) {
       for (const c of starfield.constellations) {
-        labelItems.push({
-          id: c.id,
-          dir: mulMV(m, c.anchorEqj),
-          text: c.name,
-          cls: 'const',
-          priority: 300 + c.rank * 30,
-        });
+        const dir = mulMV(m, c.anchorEqj);
+        if (!aboveSkyline(dir)) continue;
+        labelItems.push({ id: c.id, dir, text: c.name, cls: 'const', priority: 300 + c.rank * 30 });
       }
     }
   }
   if (planets) {
     planets.update(state.planets);
     planets.updateApparentSizes(look.fov, heightPx);
-    planets.setDim(skyDim);
+    planets.setDim(starDim);
     const zoom = THREE.MathUtils.clamp(
       heightPx / (2 * Math.tan(look.fov * Math.PI / 360)) / 565, 0.85, 4.0,
     );
     for (const p of state.planets) {
-      if (p.alt < -0.5) continue;
+      if (!aboveSkyline(p.sceneDir)) continue;
       const sizeCss = THREE.MathUtils.clamp(13 * Math.pow(0.74, p.mag) * zoom, 1.8, 30);
       labelItems.push({
         id: p.name,
@@ -276,15 +326,15 @@ function frame() {
       });
     }
   }
-  labelLayer.setDim(Math.pow(skyDim, 0.7));
-  labelLayer.render(camera, labelItems, dt * 1000);
+  if (earth) {
+    earth.update(state);
+    earth.setBrightness(earthBrightness);
+  }
+  if (sun) sun.update(state);
+  if (terrain) terrain.setSunDir(state.sun.sceneDir);
 
-  sunLight.intensity = 3.0 * sunUp;
-  sunLight.position.set(
-    state.sun.sceneDir[0] * 2000,
-    state.sun.sceneDir[1] * 2000,
-    state.sun.sceneDir[2] * 2000,
-  );
+  labelLayer.setDim(uiDim);
+  labelLayer.render(camera, labelItems, dt * 1000);
 
   renderer.render(scene, camera);
   requestAnimationFrame(frame);

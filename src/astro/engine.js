@@ -43,6 +43,20 @@ function unitToLatLon(v) {
 
 function vecOf(v) { return [v.x, v.y, v.z]; }
 
+/** Fraction of a disc of radius rs hidden by a disc of radius ro, centers sep apart. */
+function discOverlapFraction(sep, rs, ro) {
+  if (sep >= rs + ro) return 0;
+  if (sep <= ro - rs) return 1;
+  if (sep <= rs - ro) return (ro * ro) / (rs * rs);
+  const a = (sep * sep + rs * rs - ro * ro) / (2 * sep * rs);
+  const b = (sep * sep + ro * ro - rs * rs) / (2 * sep * ro);
+  const clamp1 = (x) => Math.max(-1, Math.min(1, x));
+  const area =
+    rs * rs * (Math.acos(clamp1(a)) - clamp1(a) * Math.sqrt(1 - clamp1(a) ** 2)) +
+    ro * ro * (Math.acos(clamp1(b)) - clamp1(b) * Math.sqrt(1 - clamp1(b) ** 2));
+  return area / (Math.PI * rs * rs);
+}
+
 /**
  * Compute the full sky state for a UTC date and a selenographic site
  * {lat, lon} (degrees, east-positive, Mean-Earth frame).
@@ -117,6 +131,13 @@ export function skyState(date, site) {
   const solarHourDeg = wrap360(site.lon - subSolar.lon + 180);
   const localSolarHours = solarHourDeg / 15;
 
+  // Solar eclipse seen from the Moon = lunar eclipse seen from Earth: the
+  // fraction of the Sun's disc hidden behind the Earth.
+  const sunAngR = Math.asin(SUN_RADIUS_KM / sunDistKm);
+  const earthAngR = Math.asin(EARTH_RADIUS_KM / earthDistKm);
+  const sep = Math.acos(Math.max(-1, Math.min(1, dot(normalize(sunVec), normalize(earthVec)))));
+  const eclipseFraction = discOverlapFraction(sep, sunAngR, earthAngR);
+
   // --- Planets ----------------------------------------------------------------
   const planets = PLANET_BODIES.map((name) => {
     const geo = scale(vecOf(Astronomy.GeoVector(Astronomy.Body[name], time, false)), AU_KM);
@@ -152,6 +173,7 @@ export function skyState(date, site) {
     subSolar,
     subLunar,
     localSolarHours,
+    eclipseFraction,
     eqjToScene,
     altAzOf,
     sceneDirOf,

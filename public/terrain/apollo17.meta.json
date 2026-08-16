@@ -1,0 +1,11 @@
+{
+  "id": "apollo17",
+  "lat": 20.1911,
+  "lon": 30.7723,
+  "halfLatDeg": 2.4,
+  "halfLonDeg": 2.557145140178651,
+  "n": 512,
+  "centerElevM": -2624.9969865599996,
+  "order": "row-major, row 0 = north edge, col 0 = west edge",
+  "source": "NASA SVS CGI Moon Kit ldem_64_uint.tif (LRO LOLA), 64 ppd (~475 m/px)"
+}

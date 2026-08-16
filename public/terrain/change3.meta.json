@@ -1,0 +1,11 @@
+{
+  "id": "change3",
+  "lat": 44.1214,
+  "lon": -19.5117,
+  "halfLatDeg": 2.4,
+  "halfLonDeg": 3.343240823532552,
+  "n": 512,
+  "centerElevM": -2633.9872617600013,
+  "order": "row-major, row 0 = north edge, col 0 = west edge",
+  "source": "NASA SVS CGI Moon Kit ldem_64_uint.tif (LRO LOLA), 64 ppd (~475 m/px)"
+}

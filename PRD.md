@@ -29,6 +29,15 @@ A realistic simulator of standing on the near side of the Moon and looking at th
 - Astronomy: `npm test` (node:test) against Horizons fixtures — Sun/Earth topocentric alt/az at 2 sites × 3 epochs, selenographic sub-Earth/sub-solar points, sub-lunar point on Earth, angular sizes, Earth phase complement, Earth render-orientation matrix.
 - Rendering/UX: headed-browser dogfood agent per task (/dev Step E); screenshots as evidence.
 
+## Product decisions log
+
+- Labels are screen-space (2D canvas layer), not world-space sprites: uniform size, collision declutter by priority (planets → stars by mag → constellations by rank), 160ms fades, dark halos, altitude culling, whole-box viewport insetting. Three visual tiers: constellations UPPERCASE cool-gray, star names neutral, planets warm + identification ring.
+- Star rendering: size 13·0.74^mag css px (zoom-scaled), intensity 10^(−0.25(mag−3)), B-V→temperature→RGB tint with 1.7-power saturation, 4-point diffraction spikes only below mag 1. No twinkle (vacuum).
+- Duplicate traditional star names (Atik on ο and ζ Per) deduped to the brighter bearer; α Cen pair keeps one label.
+- Camera: drag deltas in camera space (atan px/focal), az compensated by cos(alt) capped 0.15; fling velocity EMA with stationary-release zeroing; eased FOV zoom τ≈110ms. Zenith/nadir "deadness" when dragging horizontally at the pole is inherent alt-az behavior (Stellarium identical) — accepted.
+- Keyboard: 1/2/3/4/5 speeds (1x..1wk/s), 0=now, C=constellations, N=star names (UI buttons come with the controls task).
+
 ## Checkpoints
 
 - 2026-08-15: Tasks 1-2 built. Scaffold (Vite+Three, drag-look camera, FOV zoom) passing build; astro core passing 10/10 Horizons-verified tests. Research fleet verified all external sources (8/8).
+- 2026-08-15 (later): Task 3 shipped after 3 dogfood rounds + UX critique. Constellation geometry ±0.14° vs real sky; label architecture rebuilt screen-space after critique; star hierarchy rebuilt; p95 10.2ms. Open: east/west drift direction needs task-7 compass to verify; Sun disc is task 5.

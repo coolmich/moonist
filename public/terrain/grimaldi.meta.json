@@ -1,0 +1,11 @@
+{
+  "id": "grimaldi",
+  "lat": -5.38,
+  "lon": -68.36,
+  "halfLatDeg": 2.4,
+  "halfLonDeg": 2.410619371469697,
+  "n": 512,
+  "centerElevM": -1893.2314000000006,
+  "order": "row-major, row 0 = north edge, col 0 = west edge",
+  "source": "NASA SVS CGI Moon Kit ldem_64_uint.tif (LRO LOLA), 64 ppd (~475 m/px)"
+}
