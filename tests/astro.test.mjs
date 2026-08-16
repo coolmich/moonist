@@ -4,14 +4,33 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as Astronomy from 'astronomy-engine';
 import { skyState } from '../src/astro/engine.js';
+import { SITES as SITES_ALL } from '../src/sites.js';
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL('./fixtures/horizons.json', import.meta.url)), 'utf8'),
 );
+// Fresh Horizons vectors for the exact coordinates the app ships, so every
+// selectable site is guarded — not just two points near two of them.
+const siteFixture = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./fixtures/horizons-sites.json', import.meta.url)), 'utf8'),
+);
 
 function azDiffDeg(a, b) {
-  let d = ((a - b) % 360 + 540) % 360 - 180;
+  const d = ((a - b) % 360 + 540) % 360 - 180;
   return Math.abs(d);
+}
+
+const MONTHS = {
+  Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+  Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+};
+
+/** Angle between two alt/az directions, in degrees. */
+function angularSepDeg(alt1, az1, alt2, az2) {
+  const d = Math.PI / 180;
+  const c = Math.sin(alt1 * d) * Math.sin(alt2 * d)
+    + Math.cos(alt1 * d) * Math.cos(alt2 * d) * Math.cos((az1 - az2) * d);
+  return Math.acos(Math.max(-1, Math.min(1, c))) / d;
 }
 
 const SITES = {
@@ -33,6 +52,28 @@ for (const key of ['siteA', 'siteB']) {
     });
   }
 }
+
+test('every shipped site matches Horizons for the Sun and the Earth', () => {
+  let worst = { err: 0 };
+  for (const [id, entry] of Object.entries(siteFixture.sites)) {
+    const site = SITES_ALL.find((s) => s.id === id);
+    assert.ok(site, `fixture site ${id} is no longer shipped`);
+    assert.equal(site.lat, entry.lat, `${id} latitude drifted from the fixture`);
+    assert.equal(site.lon, entry.lon, `${id} longitude drifted from the fixture`);
+    for (const body of ['sun', 'earth']) {
+      for (const row of entry[body]) {
+        const s = skyState(new Date(`${row.t.replace(/-(\w{3})-/, (m, mo) => `-${MONTHS[mo]}-`)}Z`), site);
+        const got = s[body];
+        // Great-circle separation between the two directions, so an azimuth
+        // error near the zenith cannot hide behind the cosine.
+        const err = angularSepDeg(got.alt, got.az, row.el_deg, row.az_deg);
+        if (err > worst.err) worst = { err, id, body, t: row.t };
+        assert.ok(err < 0.05, `${id} ${body} at ${row.t}: ${err.toFixed(4)}° from Horizons`);
+      }
+    }
+  }
+  assert.ok(worst.err < 0.05, `worst ${JSON.stringify(worst)}`);
+});
 
 test('sub-Earth and sub-solar selenographic points match Horizons', () => {
   const g = fixture.geocentric;
@@ -71,13 +112,23 @@ test('angular sizes and Earth phase', () => {
     `earth illum ${s.earth.illumFraction} vs 1-moon ${1 - moonFrac}`);
 });
 
-test('ENU basis is orthonormal and az convention is N=0 E=90', () => {
-  const s = skyState(new Date(fixture.geocentric.t), { lat: 0, lon: 0 });
-  // A direction due north at the horizon must give az=0, alt=0.
-  const north = s.altAzOf(s.testVectors.northEqj);
+test('the local basis is orthonormal, right-handed, and N=0 E=90', () => {
+  const s = skyState(new Date(fixture.geocentric.t), { lat: 12, lon: -34 });
+  const { northEqj: n, eastEqj: e } = s.testVectors;
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const len = (a) => Math.sqrt(dot(a, a));
+  // Normality — omitting this once let a scaled basis through unnoticed.
+  assert.ok(Math.abs(len(n) - 1) < 1e-12, `|north| = ${len(n)}`);
+  assert.ok(Math.abs(len(e) - 1) < 1e-12, `|east| = ${len(e)}`);
+  assert.ok(Math.abs(dot(n, e)) < 1e-12, `north·east = ${dot(n, e)}`);
+  // Handedness: east × north must point at the zenith, not into the ground.
+  const up = [n[1] * e[2] - n[2] * e[1], n[2] * e[0] - n[0] * e[2], n[0] * e[1] - n[1] * e[0]];
+  const zenith = s.sceneDirOf(up);
+  assert.ok(zenith[1] < -0.999, `east x north points ${JSON.stringify(zenith)}`);
+  // And the azimuth convention itself.
+  const north = s.altAzOf(n);
   assert.ok(Math.abs(north.alt) < 1e-6 && (north.az < 1e-6 || north.az > 360 - 1e-6), JSON.stringify(north));
-  const east = s.altAzOf(s.testVectors.eastEqj);
-  assert.ok(Math.abs(east.az - 90) < 1e-6, JSON.stringify(east));
+  assert.ok(Math.abs(s.altAzOf(e).az - 90) < 1e-6);
 });
 
 test('earth sceneMatrix points the sub-lunar surface point back at the observer', () => {
@@ -110,15 +161,47 @@ test('Earth eclipses the Sun exactly when Earth sees a total lunar eclipse', () 
   // Sunlight is fully blocked, and the Sun's disc sits behind Earth's.
   const dayBefore = skyState(new Date(ecl.peak.date.getTime() - 86400000), site);
   assert.equal(dayBefore.eclipseFraction, 0);
-  // Half the umbral duration later it must be partial or over, never > 1.
-  const later = skyState(new Date(ecl.peak.date.getTime() + 3 * 3600000), site);
-  assert.ok(later.eclipseFraction >= 0 && later.eclipseFraction <= 1);
+  // The eclipse ends: totality runs at most ~107 minutes, so six hours out the
+  // Sun must be clear of the Earth again.
+  const after = skyState(new Date(ecl.peak.date.getTime() + 6 * 3600000), site);
+  assert.equal(after.eclipseFraction, 0);
+  // ...and partway out it is genuinely partial, not merely "in range".
+  let sawPartial = false;
+  for (let m = 60; m <= 240; m += 10) {
+    const f = skyState(new Date(ecl.peak.date.getTime() + m * 60000), site).eclipseFraction;
+    if (f > 0.01 && f < 0.99) sawPartial = true;
+  }
+  assert.ok(sawPartial, 'never observed a partial phase leaving totality');
 });
 
-test('no eclipse at full Moon phases that are not eclipses', () => {
-  // 2026-08-15 is nowhere near an eclipse.
-  const s = skyState(new Date(fixture.geocentric.t), SITES.siteA);
-  assert.equal(s.eclipseFraction, 0);
+test('full Moons that are not eclipses stay clear of the Earth', () => {
+  // Full Moon is exactly when a lunar eclipse *can* happen, so these are the
+  // epochs where a sloppy eclipse test would produce false positives. Most
+  // full Moons pass a few degrees above or below the shadow.
+  const eclipseTimes = [];
+  let ecl = Astronomy.SearchLunarEclipse(new Date('2026-01-01T00:00:00Z'));
+  for (let i = 0; i < 8; i++) {
+    eclipseTimes.push(ecl.peak.date.getTime());
+    ecl = Astronomy.NextLunarEclipse(ecl.peak);
+  }
+  let checked = 0;
+  let t = Astronomy.SearchMoonPhase(180, new Date('2026-01-01T00:00:00Z'), 40);
+  for (let i = 0; i < 25; i++) {
+    const ms = t.date.getTime();
+    const nearEclipse = eclipseTimes.some((e) => Math.abs(e - ms) < 36 * 3600 * 1000);
+    if (!nearEclipse) {
+      const s = skyState(t.date, SITES.siteA);
+      assert.equal(s.eclipseFraction, 0,
+        `non-eclipse full Moon ${t.date.toISOString()} reported ${s.eclipseFraction}`);
+      // A full Moon from Earth is a new Earth from the Moon — the phase
+      // relationship this simulator is built on.
+      assert.ok(s.earth.illumFraction < 0.03,
+        `Earth is ${(s.earth.illumFraction * 100).toFixed(1)}% lit at full Moon`);
+      checked++;
+    }
+    t = Astronomy.SearchMoonPhase(180, new Date(ms + 20 * 86400000), 40);
+  }
+  assert.ok(checked >= 12, `only ${checked} non-eclipse full Moons checked`);
 });
 
 test('planets present with sane magnitudes', () => {

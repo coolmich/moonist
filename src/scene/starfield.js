@@ -29,7 +29,10 @@ const STAR_VERT = /* glsl */ `
     vSpike = 1.0 - step(1.0, aMag); // diffraction spikes for mag < 1
     vSharp = mix(1.0, 3.4, vSpike);
     if (vSpike > 0.5) sizeCss *= 1.85;
-    vIntensity = clamp(pow(10.0, -0.25 * (aMag - 3.0)), 0.12, 1.0) * uDim;
+    // Scene-linear radiance. This rides the same exposure and tone mapping as
+    // the ground, so a mag-2 star lands near white at night and the sunlit
+    // surface washes the sky out by day, exactly as a camera does.
+    vIntensity = clamp(0.075 * pow(10.0, -0.25 * (aMag - 2.0)), 0.0015, 4.0) * uDim;
     vColor = aColor;
     gl_PointSize = sizeCss * uPixelRatio;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -59,6 +62,8 @@ const STAR_FRAG = /* glsl */ `
     // carries the star's color (Betelgeuse orange vs Rigel blue).
     vec3 tint = pow(vColor, vec3(1.7));
     gl_FragColor = vec4(tint * vIntensity * g, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 

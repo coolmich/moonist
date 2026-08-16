@@ -58,6 +58,40 @@ function discOverlapFraction(sep, rs, ro) {
 }
 
 /**
+ * The next sunrise or sunset at a site, found by searching the real Sun
+ * altitude rather than assuming the Sun crosses the horizon at local 06:00 —
+ * which is close to true near the equator but drifts at high latitude, and
+ * can be a whole lunar cycle out near the poles.
+ * Returns { kind: 'sunrise' | 'sunset', date, days } or null if none found.
+ */
+export function nextSunEvent(date, site, maxDays = 32) {
+  const t0 = date.getTime();
+  const step = 0.2 * 86400000;
+  let prevT = t0;
+  let prevUp = skyState(date, site).sun.alt > 0;
+  for (let t = t0 + step; t <= t0 + maxDays * 86400000; t += step) {
+    const up = skyState(new Date(t), site).sun.alt > 0;
+    if (up !== prevUp) {
+      let lo = prevT, hi = t;
+      for (let i = 0; i < 26; i++) {
+        const mid = (lo + hi) / 2;
+        if ((skyState(new Date(mid), site).sun.alt > 0) === prevUp) lo = mid;
+        else hi = mid;
+      }
+      const when = new Date((lo + hi) / 2);
+      return {
+        kind: up ? 'sunrise' : 'sunset',
+        date: when,
+        days: (when.getTime() - t0) / 86400000,
+      };
+    }
+    prevUp = up;
+    prevT = t;
+  }
+  return null;
+}
+
+/**
  * Compute the full sky state for a UTC date and a selenographic site
  * {lat, lon} (degrees, east-positive, Mean-Earth frame).
  */

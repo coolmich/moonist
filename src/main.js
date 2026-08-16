@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { skyState } from './astro/engine.js';
+import { skyState, nextSunEvent } from './astro/engine.js';
 import { mulMV } from './astro/vec.js';
 import { clock } from './sim/clock.js';
 import { SITES } from './sites.js';
@@ -161,14 +161,29 @@ function toggleLayer(key) {
   return toggles[key];
 }
 
+const LOOK_KEYS = new Set([
+  'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+  'Equal', 'Minus', 'NumpadAdd', 'NumpadSubtract',
+]);
+const keysDown = new Set();
+
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement) return;
+  if (LOOK_KEYS.has(e.code)) {
+    keysDown.add(e.code);
+    e.preventDefault();
+    return;
+  }
   if (SPEEDS[e.code]) clock.setSpeed(SPEEDS[e.code]);
   if (e.code === 'Digit0') clock.resetToRealTime();
   if (e.code === 'KeyC') ui?.syncToggle('constellations', toggleLayer('constellations'));
   if (e.code === 'KeyN') ui?.syncToggle('starNames', toggleLayer('starNames'));
-  if (e.code === 'KeyE' && latestState) view.lookAt(latestState.earth.az, latestState.earth.alt);
+  if (e.code === 'KeyE' && latestState) {
+    view.lookAt(latestState.earth.az, latestState.earth.alt, undefined, true);
+  }
 });
+window.addEventListener('keyup', (e) => keysDown.delete(e.code));
+window.addEventListener('blur', () => keysDown.clear());
 
 // ---------------------------------------------------------------------------
 // Scene content
@@ -187,19 +202,30 @@ let ui = null;
 const labelLayer = createLabelLayer(app);
 const lighting = createLighting(scene, renderer);
 
+// Site changes are async (fetch + mesh build) and can be fired faster than
+// they resolve, so a generation counter makes the last request win and the
+// ground can never disagree with the sky: `site` only changes at the moment
+// its own terrain is swapped in.
+let siteGen = 0;
 async function setSite(next) {
-  site = next;
-  const built = await createTerrain(site);
+  const gen = ++siteGen;
+  const built = await createTerrain(next);
+  if (gen !== siteGen) {
+    built.dispose();
+    return false;
+  }
   if (terrain) {
     scene.remove(terrain.group);
-    terrain.group.geometry.dispose();
-    terrain.group.material.dispose();
+    terrain.dispose();
   }
   terrain = built;
+  site = next;
+  camera.position.y = terrain.groundY + EYE_HEIGHT;
   scene.add(terrain.group);
+  return true;
 }
 
-const ready = (async () => {
+async function boot() {
   const [sf, e] = await Promise.all([
     createStarfield(renderer.getPixelRatio()),
     createEarth(renderer),
@@ -220,34 +246,86 @@ const ready = (async () => {
     clock,
     toggles,
     onToggle: toggleLayer,
-    onSiteChange: (s) => setSite(s),
+    onSiteChange: aimAfterSiteChange,
   });
-  // Open looking at the Earth: it is the one thing that never moves here, and
-  // it orients you instantly. Sit it above the horizon rather than centered so
-  // the ground is in frame too.
-  const s0 = skyState(clock.now(), site);
-  view.lookAt(s0.earth.az, Math.max(s0.earth.alt - 7, 3), 45);
+  aimAtEarth(45);
   ui.setLoading(false);
-})();
-ready.catch((err) => console.error('scene init failed:', err));
+}
+
+// Open looking at the Earth: it is the one thing that never moves here, and it
+// orients you instantly. Sit it above the horizon rather than centred so the
+// ground is in frame too.
+function aimAtEarth(fov) {
+  const s = skyState(clock.now(), site);
+  view.lookAt(s.earth.az, Math.max(s.earth.alt - 7, 3), fov);
+}
+
+// A new site puts the Earth somewhere else entirely, so re-aim rather than
+// leaving the camera pointed at empty sky.
+async function aimAfterSiteChange(next) {
+  const applied = await setSite(next);
+  if (applied) aimAtEarth();
+  return applied;
+}
+
+boot().catch((err) => {
+  console.error('scene init failed:', err);
+  const boot2 = document.getElementById('boot');
+  const step = document.getElementById('boot-step');
+  const retry = document.getElementById('boot-retry');
+  if (boot2 && step && retry) {
+    boot2.classList.add('failed');
+    step.textContent = `Could not load the Moon: ${err.message}`;
+    retry.onclick = () => window.location.reload();
+  }
+});
 
 // View API: used by the UI to swing the camera onto a target (the Earth
 // indicator, the Sun), and by automated checks to aim precisely.
 let latestState = null;
+let slew = null;
+let sunEventCache = null;
 const view = {
-  lookAt(azDeg, altDeg, fovDeg) {
+  /** Aim the camera. `smooth` slews over ~0.5 s instead of cutting. */
+  lookAt(azDeg, altDeg, fovDeg, smooth = false) {
     const target = THREE.MathUtils.degToRad(azDeg);
     // Take the shortest way round.
-    let d = ((target - look.az + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    look.az += d;
-    look.alt = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(altDeg), ALT_MIN, ALT_MAX);
+    const d = ((target - look.az + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const az = look.az + d;
+    const alt = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(altDeg), ALT_MIN, ALT_MAX);
     look.vAz = 0;
     look.vAlt = 0;
     if (fovDeg) look.fovTarget = THREE.MathUtils.clamp(fovDeg, FOV_MIN, FOV_MAX);
-    applyLook();
+    if (smooth) {
+      slew = { az, alt };
+    } else {
+      slew = null;
+      look.az = az;
+      look.alt = alt;
+      applyLook();
+    }
+  },
+  /** Earth altitude right now as seen from another site — for the picker. */
+  earthAltAt(otherSite) {
+    return skyState(clock.now(), otherSite).earth.alt;
+  },
+  /** Next sunrise/sunset here, cached — the search costs ~200 ephemeris steps. */
+  nextSunEvent() {
+    const now = clock.now().getTime();
+    if (!sunEventCache || sunEventCache.site !== site.id || now >= sunEventCache.at
+        || now < sunEventCache.from - 1000 || now - sunEventCache.from > 6 * 3600e3) {
+      const ev = nextSunEvent(new Date(now), site);
+      sunEventCache = ev
+        ? { site: site.id, from: now, at: ev.date.getTime(), kind: ev.kind }
+        : { site: site.id, from: now, at: Infinity, kind: null };
+    }
+    return sunEventCache.kind
+      ? { kind: sunEventCache.kind, days: (sunEventCache.at - now) / 86400000 }
+      : null;
   },
   get look() {
-    return { az: THREE.MathUtils.radToDeg(look.az), alt: THREE.MathUtils.radToDeg(look.alt), fov: look.fov };
+    const az = ((THREE.MathUtils.radToDeg(look.az) % 360) + 360) % 360;
+    return { az, alt: THREE.MathUtils.radToDeg(look.alt), fov: look.fov };
   },
   /** Project a scene-frame direction to client pixels for HUD indicators. */
   projectDir(dir) {
@@ -285,17 +363,57 @@ window.addEventListener('resize', () => {
 let lastFrameT = performance.now();
 
 function frame() {
+  // The loop must never die: a throw here (an ephemeris that cannot converge
+  // at an absurd epoch, a transient GL error) would otherwise freeze the app
+  // permanently with no way back short of a reload.
+  try {
+    renderFrame();
+  } catch (err) {
+    console.error('frame failed:', err);
+    if (ui) ui.showError('Could not compute the sky for that moment — jumped back to now.');
+    clock.resetToRealTime();
+  }
+  requestAnimationFrame(frame);
+}
+
+function renderFrame() {
   const now = performance.now();
   const dt = Math.min((now - lastFrameT) / 1000, 0.1);
   lastFrameT = now;
 
-  if (!look.dragging && (Math.abs(look.vAz) > 1e-4 || Math.abs(look.vAlt) > 1e-4)) {
+  if (slew) {
+    // Eased swing onto a target (clicking the Earth chip, pressing E).
+    const k = 1 - Math.exp(-dt / 0.16);
+    look.az += (slew.az - look.az) * k;
+    look.alt += (slew.alt - look.alt) * k;
+    if (Math.abs(slew.az - look.az) < 1e-4 && Math.abs(slew.alt - look.alt) < 1e-4) {
+      look.az = slew.az;
+      look.alt = slew.alt;
+      slew = null;
+    }
+  } else if (!look.dragging && (Math.abs(look.vAz) > 1e-4 || Math.abs(look.vAlt) > 1e-4)) {
     const decay = Math.exp(-dt / 0.3);
     look.az += look.vAz * dt;
     look.alt = THREE.MathUtils.clamp(look.alt + look.vAlt * dt, ALT_MIN, ALT_MAX);
     look.vAz *= decay;
     look.vAlt *= decay;
     if (look.alt === ALT_MIN || look.alt === ALT_MAX) look.vAlt = 0;
+  }
+
+  // Keyboard look, for anyone not driving a mouse.
+  if (keysDown.size) {
+    const rate = THREE.MathUtils.degToRad(look.fov) * 0.55 * dt;
+    if (keysDown.has('ArrowLeft')) look.az -= rate;
+    if (keysDown.has('ArrowRight')) look.az += rate;
+    if (keysDown.has('ArrowUp')) look.alt = THREE.MathUtils.clamp(look.alt + rate, ALT_MIN, ALT_MAX);
+    if (keysDown.has('ArrowDown')) look.alt = THREE.MathUtils.clamp(look.alt - rate, ALT_MIN, ALT_MAX);
+    if (keysDown.has('Equal') || keysDown.has('NumpadAdd')) {
+      look.fovTarget = THREE.MathUtils.clamp(look.fovTarget * Math.exp(-1.6 * dt), FOV_MIN, FOV_MAX);
+    }
+    if (keysDown.has('Minus') || keysDown.has('NumpadSubtract')) {
+      look.fovTarget = THREE.MathUtils.clamp(look.fovTarget * Math.exp(1.6 * dt), FOV_MIN, FOV_MAX);
+    }
+    if (keysDown.size) slew = null;
   }
 
   // Eased FOV zoom (snap when close so it settles quickly).
@@ -317,9 +435,23 @@ function frame() {
   const horizonAlt = terrain
     ? (dir) => terrain.horizonAlt(Math.atan2(dir[0], -dir[2]))
     : () => 0;
+  // A label is drawn only if its anchor clears the skyline and is not hidden
+  // behind the Earth's or the Sun's disc.
+  const occluders = [];
+  if (state.earth.alt > -3) {
+    occluders.push({ dir: state.earth.sceneDir, cosR: Math.cos(THREE.MathUtils.degToRad(state.earth.angRadiusDeg)) });
+  }
+  if (state.sun.alt > -3) {
+    occluders.push({ dir: state.sun.sceneDir, cosR: Math.cos(THREE.MathUtils.degToRad(state.sun.angRadiusDeg)) });
+  }
   const aboveSkyline = (dir) => {
     const h = Math.hypot(dir[0], dir[2]);
-    return Math.atan2(dir[1], h) > horizonAlt(dir) + 0.004;
+    if (Math.atan2(dir[1], h) <= horizonAlt(dir) + 0.004) return false;
+    for (const o of occluders) {
+      const d = dir[0] * o.dir[0] + dir[1] * o.dir[1] + dir[2] * o.dir[2];
+      if (d > o.cosR) return false;
+    }
+    return true;
   };
 
   const labelItems = [];
@@ -369,6 +501,22 @@ function frame() {
   if (earth) {
     earth.update(state);
     earth.setBrightness(earthBrightness);
+    // Label the hero object whenever it is actually in view. (It is its own
+    // occluder, so test the skyline directly rather than via aboveSkyline.)
+    const eh = Math.hypot(state.earth.sceneDir[0], state.earth.sceneDir[2]);
+    if (Math.atan2(state.earth.sceneDir[1], eh) > horizonAlt(state.earth.sceneDir)) {
+      labelItems.push({
+        id: 'earth',
+        dir: state.earth.sceneDir,
+        text: 'Earth',
+        cls: 'planet',
+        priority: -20,
+        ring: Math.max(
+          state.earth.angRadiusDeg * (heightPx / look.fov) + 7,
+          9,
+        ),
+      });
+    }
   }
   if (sun) sun.update(state);
   if (terrain) terrain.setSunDir(state.sun.sceneDir);
@@ -391,10 +539,9 @@ function frame() {
   }
 
   labelLayer.setDim(uiDim);
-  labelLayer.render(camera, labelItems, dt * 1000);
-  if (ui) ui.update(state, earth ? earth.cloudStatus : 'loading');
+  labelLayer.render(camera, labelItems, dt * 1000, ui ? ui.panelRects() : null);
+  if (ui) ui.update(state, earth ? earth.cloudStatus : 'loading…');
 
   renderer.render(scene, camera);
-  requestAnimationFrame(frame);
 }
 frame();

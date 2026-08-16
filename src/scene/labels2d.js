@@ -40,7 +40,7 @@ export function createLabelLayer(container) {
     setDim(d) {
       dim = d;
     },
-    render(camera, items, dtMs) {
+    render(camera, items, dtMs, avoidRects) {
       const W = canvas.clientWidth, H = canvas.clientHeight;
       if (canvas.width !== Math.round(W * ratio)) resize();
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -64,8 +64,9 @@ export function createLabelLayer(container) {
       }
       candidates.sort((a, b) => a.priority - b.priority);
 
-      // Greedy screen-space declutter.
-      const boxes = [];
+      // Greedy screen-space declutter. The chrome's own rectangles are seeded
+      // as already-occupied so sky labels never slide under a panel.
+      const boxes = avoidRects ? avoidRects.slice() : [];
       const placed = [];
       for (const c of candidates) {
         const f = FONTS[c.cls];
@@ -74,7 +75,9 @@ export function createLabelLayer(container) {
         if (f.caps) ctx.font = `${f.weight} ${f.px - 1}px -apple-system, "SF Pro Text", Arial, sans-serif`;
         const w = ctx.measureText(text).width + (f.caps ? text.length * 1.4 : 0);
         const h = f.px + 4;
-        const lx = CENTERED.has(c.cls) ? c.x - w / 2 : c.x + f.gap;
+        // Ringed objects (planets, the Earth) push their label clear of the ring.
+        const gap = f.gap + (c.ring ? c.ring : 0);
+        const lx = CENTERED.has(c.cls) ? c.x - w / 2 : c.x + gap;
         const ly = c.y - h / 2;
         // Whole box must be inside the viewport (no truncated words at edges).
         if (lx < 2 || lx + w > W - 2 || ly < 2 || ly + h > H - 2) {

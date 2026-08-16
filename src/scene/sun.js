@@ -31,7 +31,7 @@ export function createSun() {
     transparent: true,
     depthWrite: false,
   }));
-  disc.material.color.setScalar(8); // HDR-hot so tone mapping clips to white
+  disc.material.color.setScalar(60); // HDR-hot so tone mapping clips to white
 
   const glare = new THREE.Sprite(new THREE.SpriteMaterial({
     map: radialTexture([
@@ -63,7 +63,7 @@ export function createSun() {
       // Eclipsed by the Earth: the corona-less disc dims and its glare dies.
       const open = 1 - state.eclipseFraction;
       glare.scale.setScalar(discR * 9 * open);
-      disc.material.color.setScalar(8 * Math.max(open, 0.0));
+      disc.material.color.setScalar(60 * Math.max(open, 0.0));
       group.visible = s.alt > -1.2 && open > 0.001;
     },
   };

@@ -23,7 +23,7 @@ const VERT = /* glsl */ `
   varying float vIntensity;
   void main() {
     float sizeCss = clamp(13.0 * pow(0.74, aMag) * uZoom, 1.8, 30.0);
-    vIntensity = clamp(pow(10.0, -0.25 * (aMag - 3.0)), 0.2, 1.0) * uDim;
+    vIntensity = clamp(0.075 * pow(10.0, -0.25 * (aMag - 2.0)), 0.004, 4.0) * uDim;
     vColor = aColor;
     gl_PointSize = sizeCss * uPixelRatio;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -39,6 +39,8 @@ const FRAG = /* glsl */ `
     float g = exp(-dot(p, p) * 18.0);
     if (g < 0.004) discard;
     gl_FragColor = vec4(pow(vColor, vec3(1.4)) * vIntensity * g, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 

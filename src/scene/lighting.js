@@ -65,30 +65,31 @@ export function createLighting(scene, renderer) {
 
       bounce.intensity = 0.02 * sunUp + 0.003 * earthGlow;
 
-      // Exposure: day ≈ 0.9; at night it opens up so earthshine-lit regolith
-      // reads as deep twilight. With a dark Earth overhead there is genuinely
-      // nothing to see on the ground, and the frame is stars over black.
-      const targetExposure = 0.9 * sunUp + (1 - sunUp) * (3 + 7 * earthGlow);
+      // Exposure: ~0.9 in daylight; at night it opens up so earthshine-lit
+      // regolith reads as deep twilight. With a dark Earth overhead there is
+      // genuinely nothing to see on the ground and the frame is stars on black.
+      const targetExposure = 0.9 * sunUp + (1 - sunUp) * (2.6 + 5.4 * earthGlow);
       const k = 1 - Math.exp(-(dtReal ?? 0.016) / 0.6);
       current.exposure += (targetExposure - current.exposure) * k;
       renderer.toneMappingExposure = current.exposure;
 
-      // Sky objects are self-luminous relative to the ground: their display
-      // brightness is held constant against the exposure ramp (otherwise the
-      // sunlit Earth would clip to a white blob all lunar night, which is
-      // what a real camera does but not what a sky simulator should show).
-      // These divide by exposure because the renderer multiplies it back in.
       const E = current.exposure;
+      // Sunlit ground floods the camera, so the stars go with it — the reason
+      // the Apollo surface photographs have empty black skies.
       const daylightWash = 1 - 0.94 * sunUp;
       return {
-        // Camera exposed for sunlit ground can barely register stars.
-        starDim: daylightWash / E,
-        // The Earth is sunlit regolith's brighter cousin (albedo ~0.3 vs
-        // ~0.09), so it is lit at the same intensity as the directional light.
-        earthBrightness: (3.6 + 1.2 * (1 - sunUp)) / E,
-        // The 2D label layer composites outside tone mapping, so it takes the
-        // plain 0..1 factor with no exposure division.
-        uiDim: 0.25 + 0.75 * daylightWash,
+        // Stars and planets are scene-linear and tone-mapped like everything
+        // else: no exposure compensation, so they brighten as the camera opens
+        // up at night and wash out in daylight.
+        starDim: daylightWash,
+        // The Earth IS exposure-compensated. Its true brightness against the
+        // earthshine-lit ground is a ratio of order a million to one; holding
+        // its appearance steady is a deliberate camera-like compromise so the
+        // hero object stays readable instead of clipping to a white disc.
+        earthBrightness: (1.35 + 0.25 * (1 - sunUp)) / E,
+        // The 2D label layer composites outside tone mapping entirely, so it
+        // takes a plain 0..1 factor.
+        uiDim: 0.3 + 0.7 * daylightWash,
       };
     },
   };
