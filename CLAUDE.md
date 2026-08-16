@@ -16,6 +16,19 @@ product is and `PRD.md` for the requirements and the decision log.
 - **Where display choices override physics, say so in a comment.** The exposure model and the
   constant-brightness sky objects are deliberate camera-like compromises; they are marked.
 
+## Two rules that were learned the hard way
+
+- **Custom shaders must tone-map themselves.** three.js injects the tone-mapping
+  and colour-space *helpers* into a `ShaderMaterial` but not the calls. Any new
+  sky shader needs `#include <tonemapping_fragment>` and
+  `#include <colorspace_fragment>` at the end of `main()`, or it silently
+  bypasses exposure and renders in the wrong colour space. See the radiometry
+  section of `PRD.md` for which objects are exposure-compensated and which are not.
+- **Procedural terrain must not out-rank the real data.** Anything that raises
+  relief near the observer can build a false horizon that hides the real one.
+  `npm test` pins the rendered skyline against the LOLA-only skyline; if that
+  test fails, the landscape is being invented, not textured.
+
 ## Conventions that bite
 
 - **Scene frame**: +X east, +Y up, +Z south. Azimuth is measured from north through east

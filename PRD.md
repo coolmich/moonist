@@ -58,7 +58,54 @@ A realistic simulator of standing on the near side of the Moon and looking at th
 - **Eclipses are modelled**: `eclipseFraction` from disc-overlap geometry kills sunlight and the
   Sun's glare when Earth covers it, verified against astronomy-engine's lunar-eclipse search.
 
+## Radiometry (the thing that was wrong, and the rule now)
+
+Custom `ShaderMaterial`s do not get tone mapping or sRGB encoding unless their
+fragment shader includes `<tonemapping_fragment>` and `<colorspace_fragment>`;
+three.js only injects the *helpers*. Because the sky shaders omitted them, the
+JS-side "divide by exposure, the renderer multiplies it back" contract silently
+failed and sky brightness ran backwards. The rule now:
+
+- **Ground, stars, planets** are scene-linear and tone-mapped: no exposure
+  compensation. They brighten as the camera opens up at night and wash out at
+  lunar noon, which is why the Apollo surface photographs have empty skies.
+- **The Earth** *is* exposure-compensated (`K / E`). Its real brightness against
+  earthshine-lit ground is a ratio of order 10⁶; holding its appearance steady
+  is a deliberate camera-like compromise so the hero object stays readable.
+- **The 2D label layer** composites outside tone mapping entirely and therefore
+  takes a plain 0..1 factor. Never divide it by exposure.
+
+## Terrain rule
+
+Procedural detail may add texture but must not invent landscape. Relief beyond
+about a metre per hundred metres of distance starts forming its own horizon,
+which hides the real one (2.4 km on flat mare) and buries real mountains. Coarse
+features fade in past the observer's own patch of ground so no one ever stands
+inside a fabricated crater. `npm test` asserts the rendered skyline tracks the
+LOLA skyline to under 1.2° peak and 0.3° mean at every site; a systematic offset
+is the signature of an invented landscape.
+
+## Known limits
+
+- The star catalogue is J2000 with no proper motion or aberration: the fastest-
+  moving stars sit up to ~140 arcsec (0.04°) from their 2026 positions.
+- LOLA at 64 ppd is ~475 m/px, so summits are smoothed — Mons Hadley measures
+  ~4.7 km of relief against a true ~4.5 km above the plain, and features between
+  roughly 200 m and 500 m fall between the DEM and the procedural cascade.
+- The clock is clamped to 1700–2200, the range where the ephemeris is trustworthy.
+
 ## Checkpoints
 
 - 2026-08-15: Tasks 1-2 built. Scaffold (Vite+Three, drag-look camera, FOV zoom) passing build; astro core passing 10/10 Horizons-verified tests. Research fleet verified all external sources (8/8).
 - 2026-08-15 (later): Task 3 shipped after 3 dogfood rounds + UX critique. Constellation geometry ±0.14° vs real sky; label architecture rebuilt screen-space after critique; star hierarchy rebuilt; p95 10.2ms. Open: east/west drift direction needs task-7 compass to verify; Sun disc is task 5.
+- 2026-08-16: Tasks 4-7 and 9 shipped. A six-agent verification fleet (astronomy,
+  acceptance, UX, robustness, performance, code) plus adjudication found 12
+  confirmed serious defects; all are fixed. Independent results worth keeping:
+  ephemeris agrees with 26 fresh JPL Horizons rows across all six sites and a
+  15-year span to **0.0037°**; the sub-lunar point matches Fourmilab to 0.009°;
+  the star catalogue matches SIMBAD to 0.19 arcsec; the synodic period measures
+  29.507 d with 14.76 d of daylight. After the terrain fix an adjudicator
+  re-measured the skyline at 0.12° mean vs LOLA's 0.11° (was 2.75° vs 0.02°) and
+  the observer's feet within 0.16 m of the datum (was −14.94 m at Apollo 15).
+  Performance in a clean tab: 8.3 ms median, 9.5 ms p95 at Tycho, FOV 100.
+  Build output 59 MB → 14 MB.
