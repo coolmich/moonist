@@ -44,14 +44,17 @@ export const SITES = [
     blurb: "China's first lunar landing, on young Imbrium basalt. Earth sits at mid-altitude toward the south-southeast.",
   },
   {
+    // On the eastern crater floor: the central peak stands clear to the west
+    // and the terraced walls ring the horizon. The crater centre itself is the
+    // peak summit — standing there you would be on a mountainside.
     id: 'tycho',
     name: 'Tycho — crater floor',
     lat: -43.3,
-    lon: -11.22,
+    lon: -10.55,
     albedo: 0.18,
     style: 'highland',
     earthAlt: 45,
-    blurb: 'Inside the brightest young crater on the Moon: a 2-km central peak and terraced walls ring the whole horizon. Earth hangs to the north-northeast.',
+    blurb: 'Inside the brightest young crater on the Moon: the 2-km central peak stands to the west and terraced walls ring the horizon. Earth hangs to the north-northeast.',
   },
   {
     id: 'grimaldi',

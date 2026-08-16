@@ -168,6 +168,7 @@ export async function createEarth(renderer) {
   let cloudStatus = { kind: 'loading', fetchedAt: null };
   let nextCloudFetch = 0;
   let usingFallback = false;
+  let cloudFetchInFlight = false;
 
   function setClouds(tex, kind) {
     const old = uniforms.uClouds.value;
@@ -178,6 +179,8 @@ export async function createEarth(renderer) {
   }
 
   async function refreshClouds() {
+    if (cloudFetchInFlight) return;
+    cloudFetchInFlight = true;
     try {
       const live = await loadTexture(loader, `${LIVE_CLOUDS_URL}?t=${Date.now()}`, { srgb: false });
       setClouds(live, 'live');
@@ -195,6 +198,8 @@ export async function createEarth(renderer) {
           cloudStatus = { kind: 'unavailable', fetchedAt: null };
         }
       }
+    } finally {
+      cloudFetchInFlight = false;
     }
   }
   refreshClouds();

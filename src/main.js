@@ -8,7 +8,7 @@ import { createPlanets } from './scene/planets.js';
 import { createLabelLayer } from './scene/labels2d.js';
 import { createEarth } from './scene/earth.js';
 import { createSun } from './scene/sun.js';
-import { createTerrain } from './scene/terrain.js';
+import { createTerrain, EYE } from './scene/terrain.js';
 import { createLighting } from './scene/lighting.js';
 import { createUI } from './ui/ui.js';
 
@@ -17,7 +17,6 @@ import { createUI } from './ui/ui.js';
 // Azimuth is measured from North, positive toward East.
 
 const app = document.getElementById('app');
-const EYE_HEIGHT = 1.7;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -35,7 +34,7 @@ scene.background = new THREE.Color(0x000000); // vacuum: pitch black
 // plane keeps depth precision sane out to the 900 km star dome so the Earth
 // occludes stars and the terrain occludes the sky without z-fighting.
 const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.5, 2e6);
-camera.position.set(0, EYE_HEIGHT, 0);
+camera.position.set(0, EYE, 0);
 
 // ---------------------------------------------------------------------------
 // Look controls: drag the sky (the grabbed point tracks the cursor exactly),
@@ -169,6 +168,7 @@ const keysDown = new Set();
 
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement) return;
+  if (ui?.modalOpen) return; // dialogs own the keyboard while open
   if (LOOK_KEYS.has(e.code)) {
     keysDown.add(e.code);
     e.preventDefault();
@@ -190,8 +190,16 @@ window.addEventListener('blur', () => keysDown.clear());
 // ---------------------------------------------------------------------------
 // Default to Grimaldi: near the western limb the Earth hangs only ~20° up, so
 // the opening view holds the ground, the horizon and the Earth all at once —
-// the whole idea of the place in one frame. Every other site is one click away.
-let site = SITES.find((s) => s.id === 'grimaldi');
+// the whole idea of the place in one frame. A returning visitor gets the site
+// they last stood at.
+let site = (() => {
+  try {
+    const saved = localStorage.getItem('moonist.site');
+    const found = saved && SITES.find((s) => s.id === saved);
+    if (found) return found;
+  } catch { /* private mode */ }
+  return SITES.find((s) => s.id === 'grimaldi');
+})();
 
 let starfield = null;
 let planets = null;
@@ -220,8 +228,9 @@ async function setSite(next) {
   }
   terrain = built;
   site = next;
-  camera.position.y = terrain.groundY + EYE_HEIGHT;
+  camera.position.y = terrain.groundY + EYE;
   scene.add(terrain.group);
+  try { localStorage.setItem('moonist.site', next.id); } catch { /* private mode */ }
   return true;
 }
 
@@ -288,9 +297,13 @@ let sunEventCache = null;
 const view = {
   /** Aim the camera. `smooth` slews over ~0.5 s instead of cutting. */
   lookAt(azDeg, altDeg, fovDeg, smooth = false) {
+    if (!Number.isFinite(azDeg) || !Number.isFinite(altDeg)) return;
+    // Keep the accumulated drag angle bounded, or the shortest-way modulo
+    // below misbehaves after a few full turns of dragging.
+    look.az = ((look.az % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     const target = THREE.MathUtils.degToRad(azDeg);
     // Take the shortest way round.
-    const d = ((target - look.az + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const d = ((target - look.az) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
     const az = look.az + d;
     const alt = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(altDeg), ALT_MIN, ALT_MAX);
     look.vAz = 0;
@@ -309,11 +322,13 @@ const view = {
   earthAltAt(otherSite) {
     return skyState(clock.now(), otherSite).earth.alt;
   },
-  /** Next sunrise/sunset here, cached — the search costs ~200 ephemeris steps. */
+  /** Next sunrise/sunset here, cached — the search costs ~200 ephemeris steps.
+   *  The event's absolute time never changes, so the cache only invalidates
+   *  when the clock passes it, jumps backward, or the site changes. */
   nextSunEvent() {
     const now = clock.now().getTime();
-    if (!sunEventCache || sunEventCache.site !== site.id || now >= sunEventCache.at
-        || now < sunEventCache.from - 1000 || now - sunEventCache.from > 6 * 3600e3) {
+    if (!sunEventCache || sunEventCache.site !== site.id
+        || now >= sunEventCache.at || now < sunEventCache.from - 1000) {
       const ev = nextSunEvent(new Date(now), site);
       sunEventCache = ev
         ? { site: site.id, from: now, at: ev.date.getTime(), kind: ev.kind }
@@ -487,7 +502,7 @@ function renderFrame() {
     );
     for (const p of state.planets) {
       if (!aboveSkyline(p.sceneDir)) continue;
-      const sizeCss = THREE.MathUtils.clamp(13 * Math.pow(0.74, p.mag) * zoom, 1.8, 30);
+      const sizeCss = THREE.MathUtils.clamp(11 * Math.pow(0.76, p.mag) * zoom, 1.8, 16);
       labelItems.push({
         id: p.name,
         dir: p.sceneDir,

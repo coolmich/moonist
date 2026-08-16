@@ -55,7 +55,10 @@ export function createLighting(scene, renderer) {
       );
       sunLight.target.position.set(0, 0, 0);
 
-      earthLight.intensity = 0.042 * earthGlow;
+      // Earthshine: a full Earth lights the ground ~40x brighter than full
+      // moonlight on Earth. With the night exposure open, the landscape should
+      // be dimly but clearly visible — it is one of the signature sights here.
+      earthLight.intensity = 0.15 * earthGlow;
       earthLight.position.set(
         state.earth.sceneDir[0] * 2000,
         state.earth.sceneDir[1] * 2000,
@@ -63,12 +66,12 @@ export function createLighting(scene, renderer) {
       );
       earthLight.target.position.set(0, 0, 0);
 
-      bounce.intensity = 0.02 * sunUp + 0.003 * earthGlow;
+      bounce.intensity = 0.02 * sunUp + 0.008 * earthGlow;
 
       // Exposure: ~0.9 in daylight; at night it opens up so earthshine-lit
       // regolith reads as deep twilight. With a dark Earth overhead there is
       // genuinely nothing to see on the ground and the frame is stars on black.
-      const targetExposure = 0.9 * sunUp + (1 - sunUp) * (2.6 + 5.4 * earthGlow);
+      const targetExposure = 0.9 * sunUp + (1 - sunUp) * (3.0 + 5.5 * earthGlow);
       const k = 1 - Math.exp(-(dtReal ?? 0.016) / 0.6);
       current.exposure += (targetExposure - current.exposure) * k;
       renderer.toneMappingExposure = current.exposure;

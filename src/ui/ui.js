@@ -32,6 +32,12 @@ const STYLE = /* css */ `
   .btn:focus-visible, .card:focus-visible, .dt:focus-visible {
     outline: 2px solid rgba(150, 190, 240, 0.85); outline-offset: 1px;
   }
+  .panel { box-sizing: border-box; }
+  /* Very narrow: stack the layer toggles under the readout so they never collide. */
+  @media (max-width: 560px) {
+    #ui-layers { top: auto; bottom: 70px; right: 8px; }
+    #ui-readout { width: 196px; }
+  }
 
   /* ---- readout, top left ---- */
   #ui-readout {
@@ -147,6 +153,7 @@ const STYLE = /* css */ `
     display: flex; align-items: center; gap: 14px;
     transition: opacity 400ms ease;
   }
+  #ui-hint { line-height: 1.6; text-align: left; }
   #ui-hint b { color: #e6ecf3; font-weight: 600; }
   #ui-hint .dismiss { color: #7d8590; cursor: pointer; padding: 2px 4px; }
   #ui-hint .dismiss:hover { color: #e6ecf3; }
@@ -197,8 +204,9 @@ function fmtAlt(deg) {
 }
 
 function fmtAz(deg) {
-  const a = ((deg % 360) + 360) % 360;
-  return `${(a >= 359.95 ? 0 : a).toFixed(0)}°`;
+  // Round first, then wrap — otherwise 359.7° prints as "360°".
+  const a = Math.round(((deg % 360) + 360) % 360) % 360;
+  return `${a}°`;
 }
 
 function fmtClock(hours) {
@@ -323,8 +331,14 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     m.back.classList.add('open');
     m.opener = opener;
     openModal = m;
-    const first = m.sheet.querySelector('.card, .close');
-    if (first) first.focus();
+    // Land focus on the current selection (scrolled into view), not on Close.
+    const first = m.sheet.querySelector('.card[aria-current="true"]')
+      ?? m.sheet.querySelector('.card')
+      ?? m.sheet.querySelector('.close');
+    if (first) {
+      first.focus();
+      first.scrollIntoView?.({ block: 'nearest' });
+    }
   }
   function hideModal() {
     if (!openModal) return;
@@ -371,6 +385,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   function syncCards() {
     for (const { s, c } of cards) c.setAttribute('aria-current', String(s.id === view.site.id));
     siteBtn.textContent = view.site.name;
+    R.site.textContent = view.site.name;
   }
   siteBtn.addEventListener('click', () => { syncCards(); showModal(picker, siteBtn); });
 
@@ -415,7 +430,9 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   if (!seen) {
     hint = el('div', 'ui panel', hud);
     hint.id = 'ui-hint';
-    hint.innerHTML = '<span><b>Drag</b> to look around · <b>scroll</b> to zoom · <b>E</b> finds the Earth</span><span class="dismiss" role="button" tabindex="0">Got it</span>';
+    hint.innerHTML = '<span><b>Drag</b> to look around · <b>scroll</b> to zoom · <b>E</b> finds the Earth.<br>'
+      + 'The Earth never moves here, and the Sun takes two weeks to rise — <b>speed up time</b> below.</span>'
+      + '<span class="dismiss" role="button" tabindex="0">Got it</span>';
     const dismiss = () => {
       if (!hint) return;
       hint.style.opacity = '0';
@@ -424,11 +441,13 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       try { localStorage.setItem('moonist.seen', '1'); } catch { /* private mode */ }
     };
     hint.querySelector('.dismiss').addEventListener('click', dismiss);
+    // Do not let the very gesture the hint teaches destroy it: the first drag
+    // starts a grace period rather than dismissing outright.
     window.addEventListener('pointerdown', (e) => {
       if (e.target?.closest?.('#ui-hint')) return;
-      dismiss();
+      setTimeout(dismiss, 6000);
     }, { once: true });
-    setTimeout(dismiss, 15000);
+    setTimeout(dismiss, 25000);
   }
 
   // ---- boot veil (already in the document) ---------------------------------
@@ -481,9 +500,14 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
         const sx = (cx - marginX) / Math.max(Math.abs(dx), 1e-6);
         const sy = (dy < 0 ? cy - marginTop : cy - marginBottom) / Math.max(Math.abs(dy), 1e-6);
         const scale = Math.min(sx, sy);
+        let px2 = cx + dx * scale;
+        let py2 = cy + dy * scale;
+        // Never sit on the readout: drop below it instead.
+        const rr = readout.getBoundingClientRect();
+        if (px2 < rr.right + 60 && py2 < rr.bottom + 26) py2 = rr.bottom + 26;
         ptr.style.display = 'flex';
-        ptr.style.left = `${cx + dx * scale}px`;
-        ptr.style.top = `${cy + dy * scale}px`;
+        ptr.style.left = `${px2}px`;
+        ptr.style.top = `${py2}px`;
         const turn = ((state.earth.az - view.look.az) % 360 + 540) % 360 - 180;
         const climb = state.earth.alt - view.look.alt;
         const parts = [];
@@ -500,13 +524,23 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       const speedLabel = SPEEDS.find(([s]) => s === clock.speed)?.[1] ?? `${clock.speed}×`;
       if (R.site.textContent !== view.site.name) syncCards();
       R.when.textContent = `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC · ${speedLabel}`;
+
+      // Running into the ephemeris limit must not look like a silent freeze.
+      if (clock.atLimit && clock.speed !== 1 && !atLimitWarned) {
+        atLimitWarned = true;
+        clock.setSpeed(1);
+        syncSpeed();
+        api.showError('Reached the edge of the reliable ephemeris (1700–2200) — dropped back to real time.');
+      } else if (!clock.atLimit) {
+        atLimitWarned = false;
+      }
       R.sun.textContent = `${fmtAlt(state.sun.alt)} alt · ${fmtAz(state.sun.az)} az`;
       R.earth.textContent = `${fmtAlt(state.earth.alt)} alt · ${(state.earth.illumFraction * 100).toFixed(0)}% lit`;
 
       // A lunar hour is 29.53/24 Earth days, so the local clock needs its
       // scale spelled out to mean anything.
       const lsh = state.localSolarHours;
-      R.local.textContent = `${fmtClock(lsh)} · sol day ${(lsh / 24 * 29.5).toFixed(1)}/29.5`;
+      R.local.textContent = `${fmtClock(lsh)} · day ${(lsh / 24 * 29.5).toFixed(1)} of 29.5`;
       const ev = view.nextSunEvent();
       if (ev) {
         R.nextk.textContent = ev.kind === 'sunrise' ? 'Sunrise' : 'Sunset';
@@ -557,6 +591,11 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       layerBtns[key]?.setAttribute('aria-pressed', String(on));
     },
 
+    /** True while the picker or credits sheet is open (blocks app hotkeys). */
+    get modalOpen() {
+      return openModal !== null;
+    },
+
     /** Screen areas the sky-label layer must keep clear. */
     panelRects() {
       const rects = [];
@@ -571,6 +610,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
 
   let lastText = 0;
   let lastCards = 0;
+  let atLimitWarned = false;
   syncCards();
   return api;
 }

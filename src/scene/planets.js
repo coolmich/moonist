@@ -21,9 +21,15 @@ const VERT = /* glsl */ `
   uniform float uDim;
   varying vec3 vColor;
   varying float vIntensity;
+  varying float vBright;
   void main() {
-    float sizeCss = clamp(13.0 * pow(0.74, aMag) * uZoom, 1.8, 30.0);
+    // Planets are brilliant POINTS to the naked eye — their true discs are
+    // under 0.02 deg. Size is capped well below the Earth's scale and the
+    // core kept tight so Venus reads as a dazzling star, not a floating ball.
+    float sizeCss = clamp(11.0 * pow(0.76, aMag) * uZoom, 1.8, 16.0);
     vIntensity = clamp(0.075 * pow(10.0, -0.25 * (aMag - 2.0)), 0.004, 4.0) * uDim;
+    vBright = 1.0 - step(-1.0, aMag); // glare cross for Venus/Jupiter class
+    if (vBright > 0.5) sizeCss *= 1.7;
     vColor = aColor;
     gl_PointSize = sizeCss * uPixelRatio;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -34,9 +40,14 @@ const FRAG = /* glsl */ `
   precision highp float;
   varying vec3 vColor;
   varying float vIntensity;
+  varying float vBright;
   void main() {
     vec2 p = gl_PointCoord - 0.5;
-    float g = exp(-dot(p, p) * 18.0);
+    float g = exp(-dot(p, p) * mix(24.0, 60.0, vBright));
+    if (vBright > 0.5) {
+      g += (exp(-abs(p.x) * 6.0) * exp(-p.y * p.y * 500.0)
+          + exp(-abs(p.y) * 6.0) * exp(-p.x * p.x * 500.0)) * 0.3;
+    }
     if (g < 0.004) discard;
     gl_FragColor = vec4(pow(vColor, vec3(1.4)) * vIntensity * g, 1.0);
     #include <tonemapping_fragment>

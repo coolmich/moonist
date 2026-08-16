@@ -64,6 +64,18 @@ test('Apollo 17 is a valley boxed in by ~2 km massifs', () => {
 test('Tycho floor is ringed by walls climbing kilometres to the rim', () => {
   const p = peakWithin(loadSite('tycho'), 45);
   assert.ok(p.relief > 3000, `relief ${p.relief.toFixed(0)} m`);
+  // And the central peak rises in the WESTERN sector, within ~25 km — the
+  // walls are taller, so the search is sector-constrained.
+  const { surface } = loadSite('tycho');
+  let best = -Infinity;
+  for (let az = 240; az <= 300; az += 2) {
+    for (let km = 5; km <= 25; km += 0.5) {
+      const a = az * Math.PI / 180;
+      const relief = surface.sampleElev(km * 1000 * Math.sin(a), km * 1000 * Math.cos(a));
+      if (relief > best) best = relief;
+    }
+  }
+  assert.ok(best > 1500, `central peak relief to the west only ${best.toFixed(0)} m`);
 });
 
 test('mare sites are flat: no big relief close in', () => {
@@ -151,6 +163,10 @@ test('each site has the skyline its description promises', () => {
     const s = skyline(id);
     assert.ok(s.peak > 8 && s.mean > 2.5, `${id} peak ${s.peak.toFixed(1)}° mean ${s.mean.toFixed(1)}°`);
   }
+  // From the eastern floor: terraced walls ring the horizon (4-10°) with the
+  // central peak clear of the skyline to the west. (The crater CENTRE is the
+  // peak summit — a site there puts the observer on a mountainside, which is
+  // exactly the mistake an earlier build made.)
   const tycho = skyline('tycho');
-  assert.ok(tycho.peak > 20 && tycho.mean > 8, `tycho peak ${tycho.peak.toFixed(1)}° mean ${tycho.mean.toFixed(1)}°`);
+  assert.ok(tycho.peak > 8 && tycho.mean > 4, `tycho peak ${tycho.peak.toFixed(1)}° mean ${tycho.mean.toFixed(1)}°`);
 });

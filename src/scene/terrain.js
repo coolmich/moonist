@@ -45,12 +45,13 @@ const DETAIL_PARS = /* glsl */ `
     float c = mnHash(i + vec2(0.0, 1.0)), d = mnHash(i + vec2(1.0, 1.0));
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * 2.0 - 1.0;
   }
-  // Dust at centimetre scale, pebbles at decimetre scale.
+  // Dust at centimetre scale, pebbles at decimetre scale. Kept coherent:
+  // high-frequency noise dominating reads as TV static, not regolith.
   float mnGrain(vec2 p) {
-    return mnNoise(p * 24.0) * 0.008
-         + mnNoise(p * 7.0) * 0.022
-         + mnNoise(p * 2.1) * 0.05
-         + pow(max(mnNoise(p * 3.7), 0.0), 6.0) * 0.16;
+    return mnNoise(p * 24.0) * 0.004
+         + mnNoise(p * 6.0) * 0.018
+         + mnNoise(p * 1.7) * 0.06
+         + pow(max(mnNoise(p * 2.6), 0.0), 5.0) * 0.2;
   }
 `;
 
@@ -78,7 +79,7 @@ export async function createTerrain(site) {
   }
 
   const c0 = surface.surfaceAt(0, 0);
-  positions.set([0, 0, 0], 0);
+  positions.set([0, c0.y, 0], 0);
   shade(0, 0, c0, colors, 0);
 
   for (let k = 0; k <= RINGS; k++) {
@@ -140,14 +141,14 @@ export async function createTerrain(site) {
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
         {
           float camDist = length(cameraPosition - vWorldPos);
-          float grain = 1.0 / (1.0 + camDist * camDist / 900.0);
+          float grain = 1.0 / (1.0 + camDist * camDist / 400.0);
           if (grain > 0.004) {
             vec2 p = vWorldPos.xz;
-            float e = 0.03 + camDist * 0.0015;
+            float e = min(0.03 + camDist * 0.0015, 0.1);
             float h0 = mnGrain(p);
             float hx = mnGrain(p + vec2(e, 0.0));
             float hz = mnGrain(p + vec2(0.0, e));
-            vec3 bump = vec3(-(hx - h0) / e, 0.0, -(hz - h0) / e) * grain * 1.6;
+            vec3 bump = vec3(-(hx - h0) / e, 0.0, -(hz - h0) / e) * grain;
             normal = normalize(normal + bump);
           }
         }`)
@@ -158,7 +159,7 @@ export async function createTerrain(site) {
         {
           float camDist = length(cameraPosition - vWorldPos);
           float grain = 1.0 / (1.0 + camDist * camDist / 2500.0);
-          diffuseColor.rgb *= 1.0 + mnNoise(vWorldPos.xz * 6.0) * 0.16 * grain;
+          diffuseColor.rgb *= 1.0 + mnNoise(vWorldPos.xz * 2.2) * 0.09 * grain;
         }`)
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
         {
