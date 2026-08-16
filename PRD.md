@@ -109,3 +109,14 @@ is the signature of an invented landscape.
   the observer's feet within 0.16 m of the datum (was −14.94 m at Apollo 15).
   Performance in a clean tab: 8.3 ms median, 9.5 ms p95 at Tycho, FOV 100.
   Build output 59 MB → 14 MB.
+- 2026-08-16 (final gate): second 7-agent fleet on the fixed build — 7/7
+  requirements PASS, all 9 prior defects verified fixed, zero console errors,
+  UX 7.5/10. Two confirmed findings fixed: Tycho relocated from the central
+  peak (crater centre!) to the eastern floor at (−43.30, −10.55); readout site
+  line restored. Polish: earthshine visible at night, planets as capped
+  brilliant points, coherent regolith grain, NaN/turn-count lookAt guards,
+  clamp announcement, modal keyboard capture, site persistence. User-raised
+  verification (2026-08-16): sub-lunar point re-checked against Horizons at two
+  epochs (0.01° lon) and Fourmilab visually; cloud liveness proven by 66% pixel
+  change in 15 h; readout now shows fetch time and "showing today's weather"
+  when time-traveling.
