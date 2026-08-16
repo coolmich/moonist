@@ -163,15 +163,17 @@ export async function createEarth(renderer) {
 
   // Cloud cover: fetch the live EUMETSAT-derived map, fall back to the
   // bundled copy only if that fails, and never leak the texture it replaces.
-  let cloudStatus = 'loading…';
+  // The source republishes every three hours; there is no machine-readable
+  // data timestamp, so the app reports when it fetched.
+  let cloudStatus = { kind: 'loading', fetchedAt: null };
   let nextCloudFetch = 0;
   let usingFallback = false;
 
-  function setClouds(tex, status) {
+  function setClouds(tex, kind) {
     const old = uniforms.uClouds.value;
     tex.anisotropy = Math.min(8, maxAniso);
     uniforms.uClouds.value = tex;
-    cloudStatus = status;
+    cloudStatus = { kind, fetchedAt: new Date() };
     if (old && old !== tex) old.dispose();
   }
 
@@ -187,10 +189,10 @@ export async function createEarth(renderer) {
       nextCloudFetch = Date.now() + 5 * 60 * 1000;
       if (!usingFallback) {
         try {
-          setClouds(await loadTexture(loader, FALLBACK_CLOUDS_URL, { srgb: false }), 'offline copy');
+          setClouds(await loadTexture(loader, FALLBACK_CLOUDS_URL, { srgb: false }), 'offline');
           usingFallback = true;
         } catch {
-          cloudStatus = 'unavailable';
+          cloudStatus = { kind: 'unavailable', fetchedAt: null };
         }
       }
     }

@@ -520,7 +520,24 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
 
       const lk = view.look;
       R.look.textContent = `${fmtAlt(lk.alt)} alt · ${fmtAz(lk.az)} az · ${lk.fov.toFixed(0)}° fov`;
-      R.clouds.textContent = cloudStatus;
+      // Cloud freshness: say when the live map was fetched, and be explicit
+      // that clouds are always today's weather — when the clock is far from
+      // the present, the geometry time-travels but the weather cannot.
+      if (typeof cloudStatus === 'object' && cloudStatus !== null) {
+        const { kind, fetchedAt } = cloudStatus;
+        if (kind === 'live' && fetchedAt) {
+          const timeTraveling = Math.abs(d.getTime() - Date.now()) > 12 * 3600e3;
+          R.clouds.textContent = timeTraveling
+            ? 'live — showing today’s weather'
+            : `live · fetched ${fetchedAt.toISOString().slice(11, 16)} UTC`;
+        } else if (kind === 'offline') {
+          R.clouds.textContent = 'offline copy';
+        } else {
+          R.clouds.textContent = kind;
+        }
+      } else {
+        R.clouds.textContent = String(cloudStatus);
+      }
 
       if (document.activeElement !== dt) dt.value = isoLocalMinutes(d);
       syncSpeed();
