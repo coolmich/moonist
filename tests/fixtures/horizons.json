@@ -1,0 +1,49 @@
+{
+  "source": "JPL Horizons API v1.2 (https://ssd.jpl.nasa.gov/api/horizons.api), fetched 2026-08-15; ephemeris DE441; EPHEM_TYPE=OBSERVER, QUANTITIES=4,20, APPARENT=AIRLESS, ANG_FORMAT=DEG",
+  "siteA": {
+    "name": "Apollo 11 / Tranquility Base",
+    "lon": 23.4731,
+    "lat": 0.6741,
+    "alt_km": 0,
+    "sun": [
+      { "t": "2026-08-15T00:00:00Z", "az_deg": 89.115177, "el_deg": -42.832243, "range_au": 1.01071315275179, "range_rate_kms": 0.1096480 },
+      { "t": "2026-08-19T12:00:00Z", "az_deg": 90.048533, "el_deg": 12.206758, "range_au": 1.01170777622290, "range_rate_kms": 0.5354449 },
+      { "t": "2026-08-24T00:00:00Z", "az_deg": 91.597218, "el_deg": 67.124136, "range_au": 1.01289156744158, "range_rate_kms": 0.2712867 }
+    ],
+    "earth": [
+      { "t": "2026-08-15T00:00:00Z", "az_deg": 276.468853, "el_deg": 72.378401, "range_au": 0.00250892383140, "range_rate_kms": 0.0618123 },
+      { "t": "2026-08-19T12:00:00Z", "az_deg": 288.275075, "el_deg": 70.070148, "range_au": 0.00266032093124, "range_rate_kms": 0.0402747 },
+      { "t": "2026-08-24T00:00:00Z", "az_deg": 280.479395, "el_deg": 65.156070, "range_au": 0.00268391751872, "range_rate_kms": -0.0203316 }
+    ]
+  },
+  "siteB": {
+    "name": "Grimaldi",
+    "lon": -68.6,
+    "lat": -5.2,
+    "alt_km": 0,
+    "lon_echoed_by_horizons_deg_east": 291.4,
+    "sun": [
+      { "t": "2026-08-15T00:00:00Z", "az_deg": 265.072100, "el_deg": -44.876582, "range_au": 1.01071344996520, "range_rate_kms": 0.1158190 },
+      { "t": "2026-08-19T12:00:00Z", "az_deg": 116.458103, "el_deg": -78.665642, "range_au": 1.01172161829222, "range_rate_kms": 0.5388846 },
+      { "t": "2026-08-24T00:00:00Z", "az_deg": 92.413020, "el_deg": -24.830336, "range_au": 1.01290714537585, "range_rate_kms": 0.2690848 }
+    ],
+    "earth": [
+      { "t": "2026-08-15T00:00:00Z", "az_deg": 85.903524, "el_deg": 14.792513, "range_au": 0.00251700329195, "range_rate_kms": 0.0620511 },
+      { "t": "2026-08-19T12:00:00Z", "az_deg": 81.434243, "el_deg": 15.801469, "range_au": 0.00266805536659, "range_rate_kms": 0.0398374 },
+      { "t": "2026-08-24T00:00:00Z", "az_deg": 82.535743, "el_deg": 21.424723, "range_au": 0.00269019759720, "range_rate_kms": -0.0209171 }
+    ]
+  },
+  "geocentric": {
+    "t": "2026-08-15T00:00:00Z",
+    "center": "500@399 (geocenter)",
+    "target": "301 (Moon)",
+    "moon_ra_deg": 171.44882,
+    "moon_dec_deg": 1.52120,
+    "moon_ra_apparent_deg": 171.78837,
+    "moon_dec_apparent_deg": 1.37572,
+    "ra_dec_note": "moon_ra_deg/moon_dec_deg are astrometric ICRF (J2000, light-time only); *_apparent_* are airless apparent, Earth true equator & equinox of date (light-time + light deflection + stellar aberration + precession + nutation)",
+    "subEarth": { "lon_deg_east": 6.033438, "lat_deg": 2.589079 },
+    "subSolar": { "lon_deg_east": 156.312066, "lat_deg": 0.190543 }
+  },
+  "conventions": "Verified from Horizons output headers/footnotes fetched 2026-08-15. (1) Azimuth: 'Azimuth is measured clockwise from north: North(0) -> East(90) -> South(180) -> West(270) -> North(360)'. Elevation is relative to the plane perpendicular to the local zenith of the reference surface (airless apparent, 'a-app': compensated for light-time, gravitational light deflection, stellar aberration, precession and nutation). (2) Lunar topocentric site frame: 'Center pole/equ : MEAN_ME (high precision) {East-longitude positive}' -- i.e. the Moon MEAN-EARTH/polar-axis frame, NOT the principal-axis (PA) frame. (3) SITE_COORD longitude for the Moon is EAST-positive: header echoes 'Center geodetic : 23.4731, .6741, ... {E-lon(deg),Lat(deg),Alt(km)}', and Site B input -68.6 was echoed as 291.4 E-lon, confirming negative input = west longitude. (4) Geocentric Moon table: astrometric RA/DEC are in the ICRF (J2000) frame; apparent RA/DEC are Earth true-equator-and-equinox of date. Sub-observer (sub-Earth) and sub-solar lon/lat on the Moon are planetodetic in the MOON_ME frame ('Target pole/equ : MOON_ME {East-longitude positive}'), light-time corrected, positive longitude EAST. (5) Range 'delta' is apparent (light-time aberrated) distance to target center in au; 'deldot' in km/s. (6) Times are UTC ('Date__(UT)')."
+}
