@@ -1,0 +1,106 @@
+# Moonist
+
+Stand on the near side of the Moon and look up.
+
+Moonist is a real-time simulator of the lunar sky as seen from the ground. The Earth hangs
+nearly motionless overhead showing the face it is actually turning toward the Moon right
+now, with live cloud cover and a real day/night terminator. The Sun crawls across the sky
+over the true 29.5-day synodic cycle. Five thousand real stars and the constellations sit
+behind it all, and the ground underfoot is built from NASA's laser altimetry of the actual
+landing sites.
+
+```
+npm install
+npm run dev      # http://localhost:5173
+npm test         # astronomy + terrain assertions
+npm run build
+```
+
+## What you are looking at
+
+**The Earth barely moves.** The Moon keeps one face toward the Earth, so from any near-side
+site the Earth stays at a fixed spot in the sky forever — it never rises and never sets. It
+only sways a few degrees a month as libration rocks the Moon back and forth. How high it
+hangs tells you where you are: overhead near the centre of the near side, down near the
+horizon out by the limb.
+
+**A lunar day is a month long.** Sunrise to sunset is about 14.8 Earth days, and the whole
+cycle takes 29.53. The readout gives you the local solar clock and how many Earth days you
+are from the next sunrise, because "06:00" means something very different here.
+
+**The sky is black in daylight.** There is no atmosphere to scatter sunlight, so the stars
+never go away — but the camera exposure that makes the sunlit regolith look right leaves
+them nearly invisible, exactly as in the Apollo photographs. At night the exposure opens up
+and the ground appears again, lit blue-grey by earthshine.
+
+**Earth's phase is the Moon's phase, inverted.** When Earth sees a new Moon, the Moon sees a
+full Earth. When the Earth passes directly between the Sun and the Moon — a lunar eclipse for
+anyone at home — the Sun goes out here, and the simulator models that too.
+
+## Sites
+
+Six near-side sites, all with coordinates in the Mean-Earth/polar-axis frame:
+
+| Site | Lat, Lon | Earth sits at | Terrain |
+|---|---|---|---|
+| Apollo 11 — Tranquility Base | 0.67°N, 23.47°E | ~66° up | flat dark mare |
+| Apollo 15 — Hadley/Apennines | 26.13°N, 3.63°E | ~64° up | 4.5 km massifs on the skyline |
+| Apollo 17 — Taurus-Littrow | 20.19°N, 30.77°E | ~54° up | valley walled by 2 km massifs |
+| Chang'e 3 — Mare Imbrium | 44.12°N, 19.51°W | ~43° up | young flat basalt |
+| Tycho — crater floor | 43.30°S, 11.22°W | ~45° up | bright highlands, terraced walls |
+| Grimaldi — western limb | 5.38°S, 68.36°W | ~21° up | dark basin floor, Earth low |
+
+Grimaldi is the default because it is the one place where the ground, the horizon and the
+Earth all fit in a single frame.
+
+## Controls
+
+Drag to look around, wheel to zoom (4°–100° field of view). The bottom dock holds the site
+picker, time-lapse speeds and a date jump. Keys: `1`–`5` speed, `0` back to now, `C`
+constellations, `N` star names, `E` snap to the Earth.
+
+## How it is built
+
+- **Ephemeris** — [astronomy-engine](https://github.com/cosinekitty/astronomy) (MIT). Lunar
+  orientation comes from its IAU/WGCCRE rotation model, giving the Mean-Earth frame that
+  selenographic coordinates and JPL Horizons both use. Earth's orientation is built from
+  Greenwich apparent sidereal time and the EQD→EQJ rotation rather than the IAU cartographic
+  model, whose spin term is ~0.65° off.
+- **Frames** — the scene is a local horizon frame: +X east, +Y up, +Z south, azimuth measured
+  from north through east, matching Horizons' convention.
+- **Terrain** — per-site patches sampled from NASA's CGI Moon Kit LOLA map at 64 pixels per
+  degree (~475 m), pulled with HTTP range requests by `scripts/make-terrain.mjs`. Real relief
+  gives the skyline; a self-similar crater cascade, boulders and regolith noise supply
+  everything below LOLA's resolution. The surface uses a backscattering approximation so it
+  brightens toward the anti-solar point the way real regolith does.
+- **Earth** — a shader sphere textured from body-frame direction, so its orientation is driven
+  straight from the ephemeris. Clouds are fetched live and refreshed every three hours, with a
+  bundled fallback if the network is unavailable.
+- **Stars** — 5,044 stars to magnitude 6 with B−V colour, drawn with a magnitude-driven size
+  law and diffraction spikes above first magnitude. Labels live in a screen-space canvas layer
+  with priority-based collision resolution, so they never overlap, never get clipped at the
+  frame edge, and never float in front of a mountain.
+
+## Verification
+
+The astronomy is not trusted, it is checked. `npm test` asserts against JPL Horizons vectors
+computed for an observer standing on the lunar surface (`CENTER='coord@301'`): Sun and Earth
+altitude/azimuth from two sites at three epochs agree to better than 0.15°, and the
+selenographic sub-Earth and sub-solar points to better than 0.1°. Eclipse geometry is checked
+against astronomy-engine's independent lunar-eclipse search. The terrain tests assert that the
+extracted patches really do contain Mons Hadley, the Taurus-Littrow massifs and Tycho's walls
+at the right bearings and heights, which is what catches a flipped or transposed elevation
+patch. The rendered face of the Earth has been cross-checked against Fourmilab's independent
+Earth-from-Moon calculation and agrees to 0.003°.
+
+## Credits and licences
+
+- Ephemeris: **astronomy-engine** by Don Cross — MIT.
+- Validation data: **JPL Horizons** (NASA/JPL-Caltech) and **Fourmilab Earth and Moon Viewer**.
+- Lunar topography and colour: **NASA's Scientific Visualization Studio**, CGI Moon Kit
+  (LRO LOLA and LROC teams; visualiser Ernie Wright).
+- Earth day/night/specular maps: **Solar System Scope** — CC BY 4.0, derived from NASA imagery.
+- Live cloud cover: **Contains modified EUMETSAT data**, composited by Matt Eason's Live Cloud
+  Maps (CC0).
+- Star and constellation data: **d3-celestial** by Olaf Frohn — BSD 3-Clause, built on the XHIP
+  extended Hipparcos compilation.

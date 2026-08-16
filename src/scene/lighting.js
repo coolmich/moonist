@@ -55,7 +55,7 @@ export function createLighting(scene, renderer) {
       );
       sunLight.target.position.set(0, 0, 0);
 
-      earthLight.intensity = 0.028 * earthGlow;
+      earthLight.intensity = 0.042 * earthGlow;
       earthLight.position.set(
         state.earth.sceneDir[0] * 2000,
         state.earth.sceneDir[1] * 2000,

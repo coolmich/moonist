@@ -37,6 +37,27 @@ A realistic simulator of standing on the near side of the Moon and looking at th
 - Camera: drag deltas in camera space (atan px/focal), az compensated by cos(alt) capped 0.15; fling velocity EMA with stationary-release zeroing; eased FOV zoom τ≈110ms. Zenith/nadir "deadness" when dragging horizontally at the pole is inherent alt-az behavior (Stellarium identical) — accepted.
 - Keyboard: 1/2/3/4/5 speeds (1x..1wk/s), 0=now, C=constellations, N=star names (UI buttons come with the controls task).
 
+## Product decisions (later rounds)
+
+- **Default site is Grimaldi, not Apollo 11.** From the limb the Earth sits ~21° up, so the
+  opening frame holds ground, horizon and Earth together — the whole premise in one image.
+  Apollo 11 is one click away and is the flattest, most iconic surface.
+- **Opening camera** aims at the Earth's azimuth, 7° below it, at 45° FOV.
+- **Readout speaks in Earth days**: "Sunrise in 9.8 Earth days" rather than only a local clock,
+  because a lunar hour is 1.23 Earth days and the clock alone misleads.
+- **Terrain resolution**: 64 ppd LOLA (~475 m/px) fetched by range request, not the 16 ppd map
+  — at 16 ppd Mons Hadley measured 3.0 km instead of its true ~4.5 km.
+- **Radiometry**: terrain vertex colour is the site's real albedo scaled once (×2.2); the Earth
+  is lit at the same intensity constant as the directional sunlight, so ocean/desert/cloud
+  contrast comes out physically rather than by hand-tuning. Opposition surge peaks at ~1.4×.
+- **Exposure** ramps from 0.9 in daylight to 3–10 at night depending on earthshine. Sky objects
+  divide by exposure so they hold constant apparent brightness; the 2D label layer composites
+  outside tone mapping and therefore must NOT be exposure-compensated (this was a real bug).
+- **Compass marks** ride the terrain skyline (not a fixed 0° horizon) and keep full brightness
+  in daylight, since they are navigation chrome rather than sky content.
+- **Eclipses are modelled**: `eclipseFraction` from disc-overlap geometry kills sunlight and the
+  Sun's glare when Earth covers it, verified against astronomy-engine's lunar-eclipse search.
+
 ## Checkpoints
 
 - 2026-08-15: Tasks 1-2 built. Scaffold (Vite+Three, drag-look camera, FOV zoom) passing build; astro core passing 10/10 Horizons-verified tests. Research fleet verified all external sources (8/8).

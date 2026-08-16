@@ -10,6 +10,7 @@ import { createEarth } from './scene/earth.js';
 import { createSun } from './scene/sun.js';
 import { createTerrain } from './scene/terrain.js';
 import { createLighting } from './scene/lighting.js';
+import { createUI } from './ui/ui.js';
 
 // Scene coordinate convention (local horizon frame at the observer):
 //   +X = East, +Y = Up (zenith), -Z = North  (so +Z = South)
@@ -147,31 +148,42 @@ canvas.addEventListener('wheel', (e) => {
 // ---------------------------------------------------------------------------
 // Interim keyboard controls (the real UI lands with the controls task).
 // ---------------------------------------------------------------------------
+const CARDINALS = [
+  ['N', 0], ['NE', 45], ['E', 90], ['SE', 135],
+  ['S', 180], ['SW', 225], ['W', 270], ['NW', 315],
+];
 const SPEEDS = { Digit1: 1, Digit2: 60, Digit3: 3600, Digit4: 86400, Digit5: 604800 };
 const toggles = { constellations: true, starNames: true };
 
+function toggleLayer(key) {
+  toggles[key] = !toggles[key];
+  if (key === 'constellations') starfield?.showConstellations(toggles.constellations);
+  return toggles[key];
+}
+
 window.addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement) return;
   if (SPEEDS[e.code]) clock.setSpeed(SPEEDS[e.code]);
   if (e.code === 'Digit0') clock.resetToRealTime();
-  if (e.code === 'KeyC') {
-    toggles.constellations = !toggles.constellations;
-    starfield?.showConstellations(toggles.constellations);
-  }
-  if (e.code === 'KeyN') {
-    toggles.starNames = !toggles.starNames;
-  }
+  if (e.code === 'KeyC') ui?.syncToggle('constellations', toggleLayer('constellations'));
+  if (e.code === 'KeyN') ui?.syncToggle('starNames', toggleLayer('starNames'));
+  if (e.code === 'KeyE' && latestState) view.lookAt(latestState.earth.az, latestState.earth.alt);
 });
 
 // ---------------------------------------------------------------------------
 // Scene content
 // ---------------------------------------------------------------------------
-let site = SITES[0]; // Apollo 11 until the location picker lands
+// Default to Grimaldi: near the western limb the Earth hangs only ~20° up, so
+// the opening view holds the ground, the horizon and the Earth all at once —
+// the whole idea of the place in one frame. Every other site is one click away.
+let site = SITES.find((s) => s.id === 'grimaldi');
 
 let starfield = null;
 let planets = null;
 let earth = null;
 let sun = null;
 let terrain = null;
+let ui = null;
 const labelLayer = createLabelLayer(app);
 const lighting = createLighting(scene, renderer);
 
@@ -201,6 +213,21 @@ const ready = (async () => {
   scene.add(planets.group);
   scene.add(earth.group);
   scene.add(sun.group);
+
+  ui = createUI({
+    hud: document.getElementById('hud'),
+    view,
+    clock,
+    toggles,
+    onToggle: toggleLayer,
+    onSiteChange: (s) => setSite(s),
+  });
+  // Open looking at the Earth: it is the one thing that never moves here, and
+  // it orients you instantly. Sit it above the horizon rather than centered so
+  // the ground is in frame too.
+  const s0 = skyState(clock.now(), site);
+  view.lookAt(s0.earth.az, Math.max(s0.earth.alt - 7, 3), 45);
+  ui.setLoading(false);
 })();
 ready.catch((err) => console.error('scene init failed:', err));
 
@@ -221,6 +248,19 @@ const view = {
   },
   get look() {
     return { az: THREE.MathUtils.radToDeg(look.az), alt: THREE.MathUtils.radToDeg(look.alt), fov: look.fov };
+  },
+  /** Project a scene-frame direction to client pixels for HUD indicators. */
+  projectDir(dir) {
+    const e = camera.matrixWorld.elements;
+    const behind = dir[0] * -e[8] + dir[1] * -e[9] + dir[2] * -e[10] < 0;
+    const v = new THREE.Vector3(dir[0], dir[1], dir[2]).multiplyScalar(1000).project(camera);
+    const x = (v.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+    const pad = 60;
+    return {
+      x, y, behind,
+      onScreen: !behind && x > pad && x < window.innerWidth - pad && y > pad && y < window.innerHeight - pad,
+    };
   },
   get state() {
     return latestState;
@@ -333,8 +373,26 @@ function frame() {
   if (sun) sun.update(state);
   if (terrain) terrain.setSunDir(state.sun.sceneDir);
 
+  // Cardinal marks ride on the local skyline so they read as part of the view.
+  if (terrain) {
+    for (const [name, az] of CARDINALS) {
+      const a = az * Math.PI / 180;
+      const alt = terrain.horizonAlt(a) + 0.012;
+      const ch = Math.cos(alt);
+      labelItems.push({
+        id: `cmp-${name}`,
+        dir: [Math.sin(a) * ch, Math.sin(alt), -Math.cos(a) * ch],
+        text: name,
+        cls: 'compass',
+        priority: name.length === 1 ? -200 : -150,
+        tick: true,
+      });
+    }
+  }
+
   labelLayer.setDim(uiDim);
   labelLayer.render(camera, labelItems, dt * 1000);
+  if (ui) ui.update(state, earth ? earth.cloudStatus : 'loading');
 
   renderer.render(scene, camera);
   requestAnimationFrame(frame);

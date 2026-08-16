@@ -12,7 +12,9 @@ const FONTS = {
   planet: { px: 12.5, weight: 600, color: [240, 215, 170], alpha: 0.95, caps: false, gap: 10 },
   star: { px: 11.5, weight: 500, color: [210, 218, 230], alpha: 0.9, caps: false, gap: 9 },
   const: { px: 11.5, weight: 500, color: [150, 170, 198], alpha: 0.85, caps: true, gap: 0 },
+  compass: { px: 11, weight: 700, color: [150, 172, 198], alpha: 0.95, caps: true, gap: 0 },
 };
+const CENTERED = new Set(['const', 'compass']);
 
 const FADE_MS = 160;
 
@@ -43,10 +45,6 @@ export function createLabelLayer(container) {
       if (canvas.width !== Math.round(W * ratio)) resize();
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.clearRect(0, 0, W, H);
-      if (dim <= 0.02) {
-        fades.clear();
-        return;
-      }
 
       // Project, cull, and collect candidates.
       const e = camera.matrixWorld.elements;
@@ -76,7 +74,7 @@ export function createLabelLayer(container) {
         if (f.caps) ctx.font = `${f.weight} ${f.px - 1}px -apple-system, "SF Pro Text", Arial, sans-serif`;
         const w = ctx.measureText(text).width + (f.caps ? text.length * 1.4 : 0);
         const h = f.px + 4;
-        const lx = c.cls === 'const' ? c.x - w / 2 : c.x + f.gap;
+        const lx = CENTERED.has(c.cls) ? c.x - w / 2 : c.x + f.gap;
         const ly = c.y - h / 2;
         // Whole box must be inside the viewport (no truncated words at edges).
         if (lx < 2 || lx + w > W - 2 || ly < 2 || ly + h > H - 2) {
@@ -118,12 +116,24 @@ export function createLabelLayer(container) {
       ctx.lineJoin = 'round';
       for (const p of placed) {
         const f = FONTS[p.cls];
-        const a = f.alpha * dim * (p.fade ?? 1) * (p.alpha ?? 1);
+        // Compass marks are navigation chrome: they hold their brightness
+        // when the daylit surface washes the sky labels out.
+        const layerDim = p.cls === 'compass' ? 1 : dim;
+        const a = f.alpha * layerDim * (p.fade ?? 1) * (p.alpha ?? 1);
         if (a <= 0.01) continue;
         if (p.ring) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.ring, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(${f.color.join(',')},${(a * 0.55).toFixed(3)})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        if (p.tick) {
+          // Compass marks sit on the skyline with a short riser above them.
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y - 8);
+          ctx.lineTo(p.x, p.y - 17);
+          ctx.strokeStyle = `rgba(${f.color.join(',')},${(a * 0.65).toFixed(3)})`;
           ctx.lineWidth = 1;
           ctx.stroke();
         }
