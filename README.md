@@ -75,11 +75,13 @@ confesses itself top-right whenever the chrome that would show it is gone. Keys:
 speed, `0` back to now, `M` Milky Way, `C` constellations, `N` star names, `E` snap to the
 Earth, `D` readout, `H` hide — the full list lives in the Credits sheet.
 
-Sky → My location rings your own point on the Earth's disc (the browser asks for your
-location once), so you can find yourself under the clouds; the readout says when your
-side of the planet has rotated away and when it comes back. The site picker pins every
-site on a small Moon face — north up, east right, the Moon exactly as it faces the Earth —
-so you always know where you are standing.
+Sky → My location plants a beacon on your own point of the Earth's disc (the browser asks
+for your location once): a small golden shaft of light standing straight up from where you
+are, with a soft glow at its foot. It is sized with the planet, so it stays out of the way
+at a glance and grows unmissable as you zoom in — and the readout says when your side of
+the planet has rotated away and when it comes back. The site picker marks every site with
+a red cross on a small Moon face — north up, east right, the Moon exactly as it faces the
+Earth — so you always know where you are standing.
 
 ## How it is built
 

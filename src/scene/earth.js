@@ -120,8 +120,6 @@ const FRAG = /* glsl */ `
   uniform vec3 uViewDirBody;
   uniform float uViewDistBody;
   uniform float uBrightness;
-  uniform vec3 uHomeDir;   // viewer's home point, unit vector in the body frame
-  uniform float uHomeMark; // marker ring radius, radians on the sphere; 0 = off
 
   const float PI = 3.14159265358979;
   // Radii in Earth radii — the same numbers engine.js uses, whose
@@ -230,21 +228,6 @@ const FRAG = /* glsl */ `
 
     vec3 color = mix(nightSide, dayLit, dayT) * uBrightness;
 
-    // Display chrome, not physics: a ring on the viewer's home point, so
-    // "which continent am I looking at" always has an answer. Drawn over
-    // clouds and night alike, exposure-tracked so it reads in both, and
-    // sized by the CPU to stay a few pixels at any zoom. Off at 0.
-    if (uHomeMark > 0.0) {
-      float ang = acos(clamp(dot(n, uHomeDir), -1.0, 1.0));
-      float aa = max(fwidth(ang) * 1.2, uHomeMark * 0.16);
-      float ring = 1.0 - smoothstep(aa, aa * 2.0, abs(ang - uHomeMark));
-      float core = 1.0 - smoothstep(0.0, uHomeMark * 0.4, ang);
-      float m = clamp(ring + core * 0.7, 0.0, 1.0);
-      // Kept decisively blue: pushed to white by the tone curve it read as
-      // cloud or snow, which is the confusion the marker exists to cut.
-      color = mix(color, vec3(0.30, 0.58, 1.15) * max(uBrightness, 0.35), m);
-    }
-
     gl_FragColor = vec4(color, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -295,6 +278,159 @@ const ATMO_FRAG = /* glsl */ `
   }
 `;
 
+// --------------------------------------------------------------------------
+// The home beacon. Display chrome, not physics — a shaft of light standing on
+// the viewer's own point, the way open-world games mark "you are here".
+//
+// It replaced a ring drawn into the globe's fragment shader, which failed in
+// both directions at once: sized in screen pixels it swallowed continents at
+// x1 and distracted from the whole disc, sized on the sphere it vanished into
+// the clouds it was meant to cut through. The beacon is sized in globe radii
+// instead, so it scales with the drawn disc: a bright sliver you will not
+// notice at 65 deg fov, unmissable below ~40 deg, and it magnifies with the
+// EARTH xN dial like everything else in the disc's image.
+//
+// Two quads fake the volume. The shaft is a cylindrical billboard — rotated
+// about the surface normal to face the camera, its intensity falling smoothly
+// to zero across its width so the sides are glow, not edges — and a small
+// camera-facing glow sits at its foot, because a shaft seen exactly end-on
+// (home at the disc centre) foreshortens to nothing. Both breathe slowly so
+// the eye can find them.
+//
+// Occlusion is analytic: at 200k scene units the depth buffer cannot separate
+// the globe from anything near it (see ATMO_FRAG), so each fragment tests its
+// own sight line against the sphere (globeVis below) and a beacon behind the
+// limb cuts off exactly at the limb — a home just past the edge shows only
+// the protruding tip of its shaft.
+
+// Both intensity profiles reach EXACTLY zero at their quad's edges — a
+// gaussian truncated at 3% drew the rectangle itself under additive blending,
+// which is precisely the hard-edged artifact a shaft of light must not have.
+//
+// Visibility past the globe is computed per fragment, but never through the
+// naive ray quadratic: b^2 - |camO|^2 cancels 3600-scale float32 terms down
+// to order 1, and the resulting noise speckled the shaft's root. The cross
+// product keeps every product near the scale of its answer, and the
+// fragment-relative dot does the same for the depth comparison; the edge is
+// then smoothed over its own pixel footprint.
+const VIS_GLSL = /* glsl */ `
+  float globeVis(vec3 camO, vec3 p) {
+    vec3 rd = normalize(p - camO);
+    vec3 c = cross(camO, rd);
+    float d2 = dot(c, c);            // squared impact parameter of the sight line
+    if (d2 >= 1.0) return 1.0;       // misses the globe entirely
+    // How far beyond the fragment the sight line enters the globe (negative:
+    // the globe is in front). Zero exactly on the surface, so the shaft's
+    // root anti-aliases into the ground by construction.
+    float g = dot(camO - p, p) / length(p - camO) - sqrt(1.0 - d2);
+    float aa = max(fwidth(g) * 1.5, 1e-3);
+    return smoothstep(-aa, aa, g);
+  }
+`;
+
+const BEAM_VERT = /* glsl */ `
+  uniform mat4 uWarp;
+  uniform vec3 uHomeDir;
+  uniform vec3 uViewDirBody;
+  uniform float uViewDistBody;
+  varying vec2 vXY;
+  varying vec3 vPos;
+  const float LEN = 0.5;    // shaft length, globe radii
+  const float WID = 0.014;  // shaft half-width, globe radii (~90 km: a filament)
+  void main() {
+    vec3 camO = uViewDirBody * uViewDistBody;
+    vec3 base = uHomeDir;
+    vec3 toCam = normalize(camO - base);
+    vec3 side = cross(uHomeDir, toCam);
+    side /= max(length(side), 1e-5);
+    vec3 pos = base + uHomeDir * (position.y * LEN) + side * (position.x * WID);
+    vXY = position.xy;
+    vPos = pos;
+    gl_Position = uWarp * projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  }
+`;
+
+const BEAM_FRAG = /* glsl */ `
+  precision highp float;
+  varying vec2 vXY;
+  varying vec3 vPos;
+  uniform vec3 uViewDirBody;
+  uniform float uViewDistBody;
+  uniform float uBrightness;
+  uniform float uTime;
+  ${VIS_GLSL}
+  void main() {
+    vec3 camO = uViewDirBody * uViewDistBody;
+    float x2 = vXY.x * vXY.x;
+    // A thin bright core inside a wide soft fringe, zero at the quad edge —
+    // light, not a bar. Peak intensity is held under the ACES shoulder so the
+    // core keeps its gold instead of clipping to fluorescent-tube white.
+    float across = pow(max(1.0 - x2, 0.0), 2.0) * (0.35 + 0.65 * exp(-6.0 * x2));
+    float along = pow(max(1.0 - vXY.y, 0.0), 1.6);      // fades out toward the tip
+    float breathe = 0.86 + 0.14 * sin(uTime * 2.0);
+    float i = across * along * breathe * globeVis(camO, vPos);
+    // Floor on uBrightness so the beacon still reads through lunar night,
+    // when the Earth's own exposure is nearly closed. Same floor the disc
+    // chrome has always used.
+    vec3 col = vec3(1.0, 0.84, 0.55) * i * max(uBrightness, 0.35) * 1.0;
+    gl_FragColor = vec4(col, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
+const GLOW_VERT = /* glsl */ `
+  uniform mat4 uWarp;
+  uniform vec3 uHomeDir;
+  uniform vec3 uViewDirBody;
+  uniform float uViewDistBody;
+  varying vec2 vXY;
+  varying vec3 vPos;
+  // Same half-width as the shaft, by decision: the foot is the shaft's root,
+  // not a separate ball of light. Its only job is the end-on view, where the
+  // cylindrical billboard foreshortens to nothing and this dot is the marker.
+  const float R = 0.014;
+  void main() {
+    vec3 camO = uViewDirBody * uViewDistBody;
+    vec3 toCam = normalize(camO - uHomeDir);
+    vec3 helper = abs(toCam.z) < 0.99 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 rt = normalize(cross(toCam, helper));
+    vec3 up = cross(rt, toCam);
+    // Lifted toward the camera so the sphere's bulge cannot swallow the quad
+    // when the home point faces the viewer head-on, and decisively enough
+    // that no fragment sits on the visibility boundary, where any motion of
+    // the geometry makes the anti-aliased edge crawl.
+    vec3 pos = uHomeDir + toCam * 0.03 + (rt * position.x + up * position.y) * R;
+    vXY = position.xy;
+    vPos = pos;
+    gl_Position = uWarp * projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  }
+`;
+
+const GLOW_FRAG = /* glsl */ `
+  precision highp float;
+  varying vec2 vXY;
+  varying vec3 vPos;
+  uniform vec3 uViewDirBody;
+  uniform float uViewDistBody;
+  uniform float uBrightness;
+  uniform float uTime;
+  ${VIS_GLSL}
+  void main() {
+    vec3 camO = uViewDirBody * uViewDistBody;
+    float breathe = 0.86 + 0.14 * sin(uTime * 2.0);
+    float r2 = dot(vXY, vXY);
+    float i = pow(max(1.0 - r2, 0.0), 2.0) * breathe * globeVis(camO, vPos);
+    // Warmer than the shaft so it still tints white clouds when home faces
+    // the viewer head-on and the glow is all there is. Dim enough that foot
+    // plus shaft root stay under clipping — stacked they read as a flash.
+    vec3 col = vec3(1.0, 0.8, 0.5) * i * max(uBrightness, 0.35) * 0.7;
+    gl_FragColor = vec4(col, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
 function loadTexture(loader, url, { srgb = true } = {}) {
   return new Promise((resolve, reject) => {
     loader.load(url, (t) => {
@@ -335,8 +471,6 @@ export async function createEarth(renderer) {
     uViewDirBody: { value: new THREE.Vector3(1, 0, 0) },
     uViewDistBody: { value: 60.0 }, // viewer distance in globe radii
     uBrightness: { value: 1.0 },
-    uHomeDir: { value: new THREE.Vector3(1, 0, 0) },
-    uHomeMark: { value: 0 },
     uWarp: { value: new THREE.Matrix4() },
   };
 
@@ -366,9 +500,50 @@ export async function createEarth(renderer) {
     }),
   );
 
+  // The home beacon (see the shader block above — display chrome, sized in
+  // globe radii). Children of the group live in the body frame, so anchoring
+  // and orientation come free with the group's rotation; the viewer position
+  // is the atmosphere's as-drawn one, because the beacon must hug the mesh as
+  // drawn, magnifier and all.
+  const beaconUniforms = {
+    uHomeDir: { value: new THREE.Vector3(1, 0, 0) },
+    uViewDirBody: uniforms.uViewDirBody,
+    uViewDistBody: atmoUniforms.uViewDistBody,
+    uBrightness: uniforms.uBrightness,
+    uWarp: uniforms.uWarp, // shared: the beacon must squash with the globe
+    uTime: { value: 0 },
+  };
+  const beaconMat = (vert, frag) => new THREE.ShaderMaterial({
+    uniforms: beaconUniforms,
+    vertexShader: vert,
+    fragmentShader: frag,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    // The quads sit a fraction of a globe radius in front of the surface —
+    // less than one depth ulp at this distance, so an ordinary depth test
+    // resolves the tie per fragment at random and the foot renders as ragged
+    // marbling. A few ulps of polygon offset win the tie deterministically;
+    // the Moon's terrain, thousands of ulps closer, still occludes normally.
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -4,
+  });
+  const beamGeo = new THREE.PlaneGeometry(2, 1);
+  beamGeo.translate(0, 0.5, 0); // y in [0, 1]: foot at the surface, tip up
+  const beam = new THREE.Mesh(beamGeo, beaconMat(BEAM_VERT, BEAM_FRAG));
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), beaconMat(GLOW_VERT, GLOW_FRAG));
+  // The vertex shader moves the quads to the home point; the raw geometry's
+  // bounds sit at the group origin and would cull them at the frame edge.
+  beam.frustumCulled = glow.frustumCulled = false;
+  beam.visible = glow.visible = false;
+
   const group = new THREE.Group();
   group.add(globe);
   group.add(atmo);
+  group.add(beam);
+  group.add(glow);
 
   // Cloud cover: fetch the live EUMETSAT-derived map, fall back to the
   // bundled copy only if that fails, and never leak the texture it replaces.
@@ -424,8 +599,6 @@ export async function createEarth(renderer) {
 
   const rotM = new THREE.Matrix4();
   let displayScale = 1;
-  let homeVec = null;   // unit body-frame vector of the viewer's home, or null
-  let lastDiscPx = 40;  // drawn disc width, kept for marker sizing
 
   return {
     group,
@@ -438,25 +611,24 @@ export async function createEarth(renderer) {
      * bigger map worth its download.
      */
     requestDetail(discPx) {
-      lastDiscPx = discPx; // the home marker sizes itself off the drawn disc
       if (cloudWidth >= CLOUD_W_DEEP || discPx <= cloudWidth / 2) return;
       cloudWidth = CLOUD_W_DEEP;
       if (!cloudFetchInFlight) refreshClouds();
     },
     /**
-     * Viewer's home point for the display marker (see FRAG — chrome, not
-     * physics). Geographic degrees; pass null to hide the marker.
+     * Viewer's home point for the beacon (see the beacon shaders — chrome,
+     * not physics). Geographic degrees; pass null to hide it.
      */
     setHome(latDeg, lonDeg) {
       if (latDeg == null) {
-        homeVec = null;
-        uniforms.uHomeMark.value = 0;
+        beam.visible = glow.visible = false;
         return;
       }
       const lat = latDeg * Math.PI / 180;
       const lon = lonDeg * Math.PI / 180;
-      homeVec = [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
-      uniforms.uHomeDir.value.set(homeVec[0], homeVec[1], homeVec[2]);
+      beaconUniforms.uHomeDir.value.set(
+        Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat));
+      beam.visible = glow.visible = true;
     },
     update(state, camera) {
       if (Date.now() > nextCloudFetch) {
@@ -508,15 +680,9 @@ export async function createEarth(renderer) {
       uniforms.uSunPosBody.value.set(...e.sunPosBody);
       uniforms.uMoonPosBody.value.set(...e.moonPosBody);
 
-      // Home marker: hold the ring at ~7 screen px, but never let it claim
-      // more than ~28% of the drawn disc's radius — at ×1 a fixed pixel size
-      // would cover half the planet, and a marker that covers stops marking.
-      // The 0.02 rad floor (~127 km) keeps deep zooms ringing the metro area.
-      if (homeVec) {
-        const rPx = Math.min(7, 0.14 * lastDiscPx);
-        uniforms.uHomeMark.value =
-          Math.max(0.02, Math.asin(Math.min(1, 2 * rPx / Math.max(lastDiscPx, 8))));
-      }
+      // The beacon breathes on the wall clock — a find-me cue, so it must not
+      // freeze at pause or strobe at time-lapse speeds.
+      beaconUniforms.uTime.value = performance.now() / 1000;
 
       // Take the projection's radial stretch back out of the magnified disc.
       const cm = camera.matrixWorld.elements;

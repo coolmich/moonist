@@ -95,7 +95,7 @@ public/        textures, star catalogs, generated terrain patches
 `window.moonist` exposes `lookAt/look/state/site/setSite/clock` plus
 `earthScale/setEarthScale/earthScaleMax` (the Earth display magnifier, ×1–×10 — scales only
 the drawn disc, never anything physical) and `home/setHome/setHomeOn/homeReturnHours` (the
-viewer's home marker on the Earth — a display ring, never physics) — the UI uses it, and so
+viewer's home beacon on the Earth — a display light shaft, never physics) — the UI uses it, and so
 do automated browser checks. Keep it stable.
 
 ## Regenerating data

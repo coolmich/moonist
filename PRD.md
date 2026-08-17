@@ -530,10 +530,24 @@ earth", configurable by dragging, without breaking the physics.
   to find themselves on the Earth ("I'm in Seattle... I cannot even recognize
   the continent, especially if there are a lot of clouds") and not knowing
   where the sites sit on the Moon. Two additions. (1) Sky → My location: the
-  browser's geolocation, asked once and remembered, drives a ring drawn in
-  the Earth shader — display chrome, never physics: over clouds and night,
-  exposure-tracked, sized by the CPU to hold ~7 screen px at any zoom with a
-  ~127 km floor. The readout's Home row answers the other half of the
+  browser's geolocation, asked once and remembered, drives a home beacon —
+  display chrome, never physics. Shipped first as a ring drawn in the Earth
+  shader, sized to hold ~7 screen px; rejected by the user the same day
+  (invisible against the clouds when small, a distraction covering continents
+  when large) and replaced by a beacon: a thin gold shaft of light standing
+  perpendicular on the viewer's point (0.5 R long, 0.014 R half-wide, the
+  open-world-game "you are here" idiom), cylindrical-billboarded, intensity
+  reaching exactly zero at its quad edges — a truncated gaussian drew the
+  quad rectangle under additive blending — with a same-width foot dot that
+  carries the marker when the shaft is seen end-on, both breathing ~3 s.
+  Sized in globe radii by design: a fleck at 65° fov, unmissable below 40°,
+  and it rides the EARTH ×N dial like the rest of the disc's image. Two
+  rendering traps recorded: the depth buffer cannot separate the beacon from
+  the globe at 200k scene units, so the materials carry polygon offset to win
+  that tie deterministically (terrain still occludes), and the limb occlusion
+  is computed analytically in a float32-stable form (cross-product impact
+  parameter, fragment-relative depth) because the naive ray quadratic cancels
+  3600-scale terms to order 1 and speckles. The readout's Home row answers the other half of the
   question: "facing the Moon" straight off the sub-lunar point, or "behind
   the Earth · back in ~N h" from an hourly ephemeris search (refreshed once
   a minute, skipped above 1 hr/s where hours pass per second). (2) The site

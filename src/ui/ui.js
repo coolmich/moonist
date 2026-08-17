@@ -226,12 +226,20 @@ const STYLE = /* css */ `
     position: relative; width: 54px; height: 54px;
   }
   .card .moonprev img { width: 100%; height: 100%; display: block; }
+  /* A red surveyor's cross, the map idiom for "this exact spot" — a dot read
+     as a feature of the surface. Dark halo so it holds on bright highlands. */
   .card .moonprev .pin {
-    position: absolute; width: 7px; height: 7px; border-radius: 50%;
-    background: #7fb2ea; border: 1.5px solid rgba(5, 8, 12, 0.9);
-    box-shadow: 0 0 5px rgba(127, 178, 234, 0.9);
+    position: absolute; width: 9px; height: 9px;
     transform: translate(-50%, -50%);
+    filter: drop-shadow(0 0 1px rgba(5, 8, 12, 0.95));
   }
+  .card .moonprev .pin::before,
+  .card .moonprev .pin::after {
+    content: ""; position: absolute; left: 50%; top: 50%;
+    background: #ff5a47; transform: translate(-50%, -50%);
+  }
+  .card .moonprev .pin::before { width: 9px; height: 1.5px; }
+  .card .moonprev .pin::after { width: 1.5px; height: 9px; }
   .card .name { grid-column: 2; font-size: 13px; font-weight: 620; color: #e8edf4; }
   .card .earth {
     grid-column: 3; grid-row: 1 / span 2; align-self: center; text-align: right;
@@ -545,8 +553,8 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     b.addEventListener('click', () => b.setAttribute('aria-pressed', String(onToggle(key))));
     layerBtns[key] = b;
   }
-  // Home marker: a display overlay ringing the viewer's own point on the
-  // Earth — never physics. Geolocated once on first use, then remembered.
+  // Home marker: a display beacon of light standing on the viewer's own point
+  // on the Earth — never physics. Geolocated once on first use, then remembered.
   const homeBtn = el('button', 'btn', skyPop, 'My location');
   homeBtn.type = 'button';
   homeBtn.title = 'Mark where you are on the Earth. Asks the browser for your location once.';
