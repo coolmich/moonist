@@ -412,6 +412,16 @@ function localMinutes(d) {
     + `T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+// Great-circle separation in degrees — local twin of the engine's tested
+// angSepDeg (the chrome talks to the app only through the view API, so the
+// four lines are duplicated rather than importing the astro core here).
+function gcSepDeg(aLat, aLon, bLat, bLon) {
+  const d = Math.PI / 180;
+  const c = Math.sin(aLat * d) * Math.sin(bLat * d)
+    + Math.cos(aLat * d) * Math.cos(bLat * d) * Math.cos((aLon - bLon) * d);
+  return Math.acos(Math.max(-1, Math.min(1, c))) / d;
+}
+
 // Short zone name for the date being simulated, so a summer date reads PDT and
 // a winter one PST. Zones without an abbreviation come back as "GMT+5:30".
 const ZONE_FMT = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' });
@@ -447,12 +457,13 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   details.innerHTML = `
     <div class="row"><span class="k">Sun</span><span class="v" data-k="sun"></span></div>
     <div class="row"><span class="k">Earth</span><span class="v" data-k="earth"></span></div>
+    <div class="row" data-k="homerow" style="display:none"><span class="k">Home</span><span class="v" data-k="home"></span></div>
     <div class="sep"></div>
     <div class="row"><span class="k">Lunar time</span><span class="v" data-k="local"></span></div>
     <div class="row"><span class="k">Looking</span><span class="v" data-k="look"></span></div>
     <div class="row"><span class="k">Cloud map</span><span class="v" data-k="clouds"></span></div>`;
   const R = Object.fromEntries(
-    ['sun', 'earth', 'local', 'look', 'clouds']
+    ['sun', 'earth', 'home', 'homerow', 'local', 'look', 'clouds']
       .map((k) => [k, details.querySelector(`[data-k=${k}]`)]),
   );
   R.site = statusLine.querySelector('.site');
@@ -534,6 +545,31 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     b.addEventListener('click', () => b.setAttribute('aria-pressed', String(onToggle(key))));
     layerBtns[key] = b;
   }
+  // Home marker: a display overlay ringing the viewer's own point on the
+  // Earth — never physics. Geolocated once on first use, then remembered.
+  const homeBtn = el('button', 'btn', skyPop, 'My location');
+  homeBtn.type = 'button';
+  homeBtn.title = 'Mark where you are on the Earth. Asks the browser for your location once.';
+  homeBtn.setAttribute('aria-pressed', 'false');
+  homeBtn.addEventListener('click', () => {
+    if (view.homeOn) {
+      view.setHomeOn(false);
+    } else if (view.home) {
+      view.setHomeOn(true);
+    } else if (!navigator.geolocation) {
+      api.showError('This browser cannot report your location.');
+    } else {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          view.setHome(pos.coords.latitude, pos.coords.longitude);
+          view.setHomeOn(true);
+        },
+        () => api.showError('Could not get your location — allow location access for this site and try again.'),
+        { timeout: 10000, maximumAge: 3600e3 },
+      );
+    }
+  });
+
   // Earth magnifier: a display choice, so its ×N is printed beside the dial —
   // a giant Earth must always say it is artificial.
   // Log-mapped so the low end, where a nudge is most visible, gets the most
@@ -999,6 +1035,32 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       R.sun.textContent = `${fmtAlt(state.sun.alt)} alt · ${fmtAz(state.sun.az)} az`;
       R.earth.textContent = `${fmtAlt(state.earth.alt)} alt · ${(state.earth.illumFraction * 100).toFixed(0)}% lit`;
 
+      // Home: does the viewer's own point face the Moon right now? In-view is
+      // read straight off the sub-lunar point; the return countdown costs an
+      // ephemeris search, so it is refreshed once a minute and skipped at
+      // time-lapse speeds where hours pass per second anyway.
+      if (homeBtn.getAttribute('aria-pressed') !== String(view.homeOn)) {
+        homeBtn.setAttribute('aria-pressed', String(view.homeOn));
+      }
+      if (view.homeOn) {
+        R.homerow.style.display = '';
+        const sep = gcSepDeg(state.subLunar.lat, state.subLunar.lon, view.home.lat, view.home.lon);
+        if (sep < 85) R.home.textContent = 'facing the Moon';
+        else if (sep < 91) R.home.textContent = 'on the limb, foreshortened';
+        else if (clock.speed > 3600) R.home.textContent = 'behind the Earth';
+        else {
+          if (now - lastHome > 60000) {
+            lastHome = now;
+            homeHours = view.homeReturnHours();
+          }
+          R.home.textContent = homeHours
+            ? `behind the Earth · back in ~${homeHours} h`
+            : 'behind the Earth';
+        }
+      } else {
+        R.homerow.style.display = 'none';
+      }
+
       // A lunar hour is 29.53/24 Earth days, so this clock needs its scale
       // spelled out to mean anything — and its label has to say "lunar", now
       // that the date above it is the viewer's own local time.
@@ -1105,6 +1167,8 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
 
   let lastText = 0;
   let lastCards = 0;
+  let lastHome = 0;
+  let homeHours = null;
   let lastMag = view.earthScale;
   let atLimitWarned = false;
   syncCards();

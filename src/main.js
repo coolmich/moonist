@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { skyState, nextSunEvent } from './astro/engine.js';
+import { skyState, nextSunEvent, angSepDeg } from './astro/engine.js';
 import { mulMV } from './astro/vec.js';
 import { clock } from './sim/clock.js';
 import { SITES } from './sites.js';
@@ -259,6 +259,20 @@ let earthScale = (() => {
   return 1;
 })();
 
+// The viewer's home point on the Earth — a display marker, never physics.
+// Filled from the browser's geolocation the first time the user asks for it,
+// then remembered; the marker toggle is remembered separately.
+let home = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem('moonist.home'));
+    if (Number.isFinite(v?.lat) && Number.isFinite(v?.lon)) return v;
+  } catch { /* private mode or unset */ }
+  return null;
+})();
+let homeOn = (() => {
+  try { return localStorage.getItem('moonist.homeOn') === '1'; } catch { return false; }
+})();
+
 let milkyway = null;
 let starfield = null;
 let planets = null;
@@ -301,6 +315,7 @@ async function boot() {
   ]);
   starfield = sf;
   earth = e;
+  if (homeOn && home) earth.setHome(home.lat, home.lon);
   milkyway = createMilkyWay(renderer);
   // The layer keys work before boot finishes, so adopt whatever state they left.
   milkyway.setVisible(toggles.milkyWay);
@@ -453,6 +468,37 @@ const view = {
   },
   get state() {
     return latestState;
+  },
+  /** Viewer's home on the Earth (display marker): {lat, lon} or null. */
+  get home() {
+    return home;
+  },
+  get homeOn() {
+    return homeOn && !!home;
+  },
+  setHome(latDeg, lonDeg) {
+    if (!Number.isFinite(latDeg) || !Number.isFinite(lonDeg)) return;
+    home = { lat: latDeg, lon: lonDeg };
+    try { localStorage.setItem('moonist.home', JSON.stringify(home)); } catch { /* private mode */ }
+    if (homeOn) earth?.setHome(home.lat, home.lon);
+  },
+  setHomeOn(on) {
+    homeOn = !!on;
+    try { localStorage.setItem('moonist.homeOn', homeOn ? '1' : '0'); } catch { /* private mode */ }
+    if (homeOn && home) earth?.setHome(home.lat, home.lon);
+    else earth?.setHome(null);
+    return homeOn && !!home;
+  },
+  /** Hours until home next faces the Moon: 0 = facing now, null = not
+   *  within a day. Costs up to ~26 ephemeris steps — call sparingly. */
+  homeReturnHours() {
+    if (!home) return null;
+    const t0 = clock.now().getTime();
+    for (let h = 0; h <= 26; h++) {
+      const s = skyState(new Date(t0 + h * 3600e3), site);
+      if (angSepDeg(s.subLunar.lat, s.subLunar.lon, home.lat, home.lon) < 88) return h;
+    }
+    return null;
   },
   get site() {
     return site;

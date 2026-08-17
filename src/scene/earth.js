@@ -120,6 +120,8 @@ const FRAG = /* glsl */ `
   uniform vec3 uViewDirBody;
   uniform float uViewDistBody;
   uniform float uBrightness;
+  uniform vec3 uHomeDir;   // viewer's home point, unit vector in the body frame
+  uniform float uHomeMark; // marker ring radius, radians on the sphere; 0 = off
 
   const float PI = 3.14159265358979;
   // Radii in Earth radii — the same numbers engine.js uses, whose
@@ -227,6 +229,20 @@ const FRAG = /* glsl */ `
     nightSide += vec3(0.55, 0.65, 0.85) * cover * 0.004; // hint of moonlit cloud
 
     vec3 color = mix(nightSide, dayLit, dayT) * uBrightness;
+
+    // Display chrome, not physics: a ring on the viewer's home point, so
+    // "which continent am I looking at" always has an answer. Drawn over
+    // clouds and night alike, exposure-tracked so it reads in both, and
+    // sized by the CPU to stay a few pixels at any zoom. Off at 0.
+    if (uHomeMark > 0.0) {
+      float ang = acos(clamp(dot(n, uHomeDir), -1.0, 1.0));
+      float aa = max(fwidth(ang) * 1.2, uHomeMark * 0.16);
+      float ring = 1.0 - smoothstep(aa, aa * 2.0, abs(ang - uHomeMark));
+      float core = 1.0 - smoothstep(0.0, uHomeMark * 0.4, ang);
+      float m = clamp(ring + core * 0.85, 0.0, 1.0);
+      color = mix(color, vec3(0.62, 0.80, 1.05) * max(uBrightness, 0.35), m);
+    }
+
     gl_FragColor = vec4(color, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -317,6 +333,8 @@ export async function createEarth(renderer) {
     uViewDirBody: { value: new THREE.Vector3(1, 0, 0) },
     uViewDistBody: { value: 60.0 }, // viewer distance in globe radii
     uBrightness: { value: 1.0 },
+    uHomeDir: { value: new THREE.Vector3(1, 0, 0) },
+    uHomeMark: { value: 0 },
     uWarp: { value: new THREE.Matrix4() },
   };
 
@@ -404,6 +422,8 @@ export async function createEarth(renderer) {
 
   const rotM = new THREE.Matrix4();
   let displayScale = 1;
+  let homeVec = null;   // unit body-frame vector of the viewer's home, or null
+  let lastDiscPx = 40;  // drawn disc width, kept for marker sizing
 
   return {
     group,
@@ -416,9 +436,25 @@ export async function createEarth(renderer) {
      * bigger map worth its download.
      */
     requestDetail(discPx) {
+      lastDiscPx = discPx; // the home marker sizes itself off the drawn disc
       if (cloudWidth >= CLOUD_W_DEEP || discPx <= cloudWidth / 2) return;
       cloudWidth = CLOUD_W_DEEP;
       if (!cloudFetchInFlight) refreshClouds();
+    },
+    /**
+     * Viewer's home point for the display marker (see FRAG — chrome, not
+     * physics). Geographic degrees; pass null to hide the marker.
+     */
+    setHome(latDeg, lonDeg) {
+      if (latDeg == null) {
+        homeVec = null;
+        uniforms.uHomeMark.value = 0;
+        return;
+      }
+      const lat = latDeg * Math.PI / 180;
+      const lon = lonDeg * Math.PI / 180;
+      homeVec = [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
+      uniforms.uHomeDir.value.set(homeVec[0], homeVec[1], homeVec[2]);
     },
     update(state, camera) {
       if (Date.now() > nextCloudFetch) {
@@ -469,6 +505,13 @@ export async function createEarth(renderer) {
       // Eclipse-shadow geometry, Earth body frame in Earth radii (see FRAG).
       uniforms.uSunPosBody.value.set(...e.sunPosBody);
       uniforms.uMoonPosBody.value.set(...e.moonPosBody);
+
+      // Home marker: hold the ring at ~7 screen px whatever the zoom, with a
+      // floor so deep zooms shrink it to the metro area rather than a point.
+      if (homeVec) {
+        uniforms.uHomeMark.value =
+          Math.min(0.5, Math.max(0.02, Math.asin(Math.min(1, 14 / Math.max(lastDiscPx, 8)))));
+      }
 
       // Take the projection's radial stretch back out of the magnified disc.
       const cm = camera.matrixWorld.elements;

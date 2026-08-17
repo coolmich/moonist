@@ -76,6 +76,16 @@ function discOverlapFraction(sep, rs, ro) {
 }
 
 /**
+ * Great-circle separation between two geographic points, in degrees.
+ * Backs the "is home facing the Moon" readout: home is on the visible
+ * hemisphere when its separation from the sub-lunar point is under ~90°.
+ */
+export function angSepDeg(aLat, aLon, bLat, bLon) {
+  const d = dot(latLonToUnit(aLat, aLon), latLonToUnit(bLat, bLon));
+  return Math.acos(Math.max(-1, Math.min(1, d))) / DEG;
+}
+
+/**
  * Fraction of the Sun's disc the Moon covers, seen from a point on the Earth's
  * surface — the Moon's shadow during a solar eclipse. All positions are in the
  * Earth body frame in Earth radii; `n` is the unit surface point. Computed

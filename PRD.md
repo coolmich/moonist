@@ -526,3 +526,19 @@ earth", configurable by dragging, without breaking the physics.
   cold visitors and fades the sunrise countdown exactly while it is being
   watched. Label avoidance gets empty rects while hidden, so sky labels use
   the whole frame. 43 tests green.
+- 2026-08-17 (home marker + picker Moon faces): user reported not being able
+  to find themselves on the Earth ("I'm in Seattle... I cannot even recognize
+  the continent, especially if there are a lot of clouds") and not knowing
+  where the sites sit on the Moon. Two additions. (1) Sky → My location: the
+  browser's geolocation, asked once and remembered, drives a ring drawn in
+  the Earth shader — display chrome, never physics: over clouds and night,
+  exposure-tracked, sized by the CPU to hold ~7 screen px at any zoom with a
+  ~127 km floor. The readout's Home row answers the other half of the
+  question: "facing the Moon" straight off the sub-lunar point, or "behind
+  the Earth · back in ~N h" from an hourly ephemeris search (refreshed once
+  a minute, skipped above 1 hr/s where hours pass per second). (2) The site
+  picker pins each site on an orthographic near-side albedo disc rendered by
+  make-moonface.mjs from the CGI Moon Kit color map — north up, east right,
+  the naked-eye frame — landmark-asserted before writing because a mirrored
+  Moon still looks like a Moon; pin math node-tested the same way. View API
+  gains home/setHome/setHomeOn/homeReturnHours. 48 tests green.
