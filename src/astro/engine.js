@@ -54,6 +54,11 @@ function unitToLatLon(v) {
 
 function vecOf(v) { return [v.x, v.y, v.z]; }
 
+// Radii in Earth radii, for eclipse-shadow geometry expressed in the Earth's
+// body frame (the same numbers the Earth shader carries as constants).
+const SUN_RADIUS_ER = SUN_RADIUS_KM / EARTH_RADIUS_KM;
+const MOON_RADIUS_ER = MOON_RADIUS_KM / EARTH_RADIUS_KM;
+
 /** Fraction of a disc of radius rs hidden by a disc of radius ro, centers sep apart. */
 function discOverlapFraction(sep, rs, ro) {
   if (sep >= rs + ro) return 0;
@@ -66,6 +71,41 @@ function discOverlapFraction(sep, rs, ro) {
     rs * rs * (Math.acos(clamp1(a)) - clamp1(a) * Math.sqrt(1 - clamp1(a) ** 2)) +
     ro * ro * (Math.acos(clamp1(b)) - clamp1(b) * Math.sqrt(1 - clamp1(b) ** 2));
   return area / (Math.PI * rs * rs);
+}
+
+/**
+ * Fraction of the Sun's disc the Moon covers, seen from a point on the Earth's
+ * surface — the Moon's shadow during a solar eclipse. All positions are in the
+ * Earth body frame in Earth radii; `n` is the unit surface point. Computed
+ * from the actual surface point, not the Earth's centre, so lunar parallax
+ * (about a degree across the globe — the entire eclipse geometry) is exact.
+ * The Earth shader evaluates this same expression per fragment; this is the
+ * node-testable twin the eclipse tests pin against astronomy-engine's
+ * independent eclipse searches.
+ */
+export function sunObscuration(n, sunPosBody, moonPosBody) {
+  const toSun = sub(sunPosBody, n);
+  const toMoon = sub(moonPosBody, n);
+  const ds = length(toSun);
+  const dm = length(toMoon);
+  const rs = Math.asin(Math.min(1, SUN_RADIUS_ER / ds));
+  const rm = Math.asin(Math.min(1, MOON_RADIUS_ER / dm));
+  // Half-angle separation: stable at the milliradian angles an eclipse
+  // lives at, where acos(dot) has already lost most of its precision.
+  const du = sub(scale(toSun, 1 / ds), scale(toMoon, 1 / dm));
+  const sep = 2 * Math.asin(Math.min(1, length(du) / 2));
+  return discOverlapFraction(sep, rs, rm);
+}
+
+/**
+ * Sun obscuration by the Moon at a geographic point (geocentric spherical
+ * latitude, east-positive longitude, sea level), for cross-checking against
+ * astronomy-engine's local-eclipse search. Purely geometric: it reports disc
+ * coverage whether or not the Sun is above that point's horizon.
+ */
+export function solarObscurationAt(date, latDeg, lonDeg) {
+  const s = skyState(date, { lat: 0, lon: 0 }); // Earth-frame vectors are site-independent
+  return sunObscuration(latLonToUnit(latDeg, lonDeg), s.earth.sunPosBody, s.earth.moonPosBody);
 }
 
 /**
@@ -161,7 +201,12 @@ export function skyState(date, site) {
     earthCols[0][1], earthCols[1][1], earthCols[2][1],
     earthCols[0][2], earthCols[1][2], earthCols[2][2],
   ];
-  const subLunar = unitToLatLon(mulMV(transpose(earthM), normalize(moonPosKm)));
+  const earthMT = transpose(earthM);
+  const subLunar = unitToLatLon(mulMV(earthMT, normalize(moonPosKm)));
+  // Sun and Moon positions in the Earth body frame, in Earth radii — the
+  // inputs to sunObscuration and to the shader's per-fragment eclipse shadow.
+  const sunPosBody = scale(mulMV(earthMT, sunGeoKm), 1 / EARTH_RADIUS_KM);
+  const moonPosBody = scale(mulMV(earthMT, moonPosKm), 1 / EARTH_RADIUS_KM);
 
   // --- Sun -------------------------------------------------------------------
   const sunVec = sub(sunGeoKm, obsEqjKm);
@@ -233,6 +278,8 @@ export function skyState(date, site) {
       illumFraction: earthIllum,
       // Earth body→scene rotation, for orienting the rendered globe.
       sceneMatrix: mulMM(eqjToScene, earthM),
+      sunPosBody,
+      moonPosBody,
     },
     planets,
     subEarth,
