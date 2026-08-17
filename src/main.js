@@ -211,7 +211,7 @@ let site = (() => {
 
 // Earth display magnification (1 = its real angular size). A pure display
 // choice, clamped and stored here so every consumer — the mesh, the label
-// ring, the label occluder — agrees on one value. ×10 keeps the whole disc
+// clearance, the label occluder — agrees on one value. ×10 keeps the whole disc
 // above the skyline even at Grimaldi, where the Earth hangs lowest (~21°).
 const EARTH_SCALE_MAX = 10;
 let earthScale = (() => {
@@ -382,7 +382,7 @@ const view = {
     let rPx = 0;
     if (angRadiusDeg) {
       // The disc's reach back toward the screen centre is f·(tan φ −
-      // tan(φ−θ)), not f·tan θ — the same tan convexity the label ring
+      // tan(φ−θ)), not f·tan θ — the same tan convexity the label clearance
       // accounts for. With the on-axis form a ×10 disc sliding off a wide
       // frame still had a ~185 px slab on screen when the chip fired.
       const theta = THREE.MathUtils.degToRad(angRadiusDeg);
@@ -575,7 +575,7 @@ function renderFrame() {
         text: p.name,
         cls: 'planet',
         priority: p.mag,
-        ring: sizeCss / 2 + 5,
+        clearPx: sizeCss / 2 + 5,
       });
     }
   }
@@ -587,11 +587,11 @@ function renderFrame() {
     // occluder, so test the skyline directly rather than via aboveSkyline.)
     const eh = Math.hypot(state.earth.sceneDir[0], state.earth.sceneDir[2]);
     if (Math.atan2(state.earth.sceneDir[1], eh) > horizonAlt(state.earth.sceneDir)) {
-      // Ring radius that still encloses the disc off-axis. The projection of
-      // a sphere seen at angle phi from the view axis stretches outward to
-      // f·(tan(phi+theta) − tan(phi)); with a magnified disc (theta up to
-      // 9.5°) the on-axis f·tan(theta) slices through the limb once the
-      // Earth sits off-centre. Slightly loose tangentially, never inside.
+      // Clearance radius that still encloses the disc off-axis, so the label
+      // never lands on the Earth. The projection of a sphere seen at angle phi
+      // from the view axis stretches outward to f·(tan(phi+theta) − tan(phi));
+      // with a magnified disc (theta up to 9.5°) the on-axis f·tan(theta)
+      // slices through the limb once the Earth sits off-centre.
       const ed = state.earth.sceneDir;
       const cosPhi = Math.sin(look.az) * Math.cos(look.alt) * ed[0]
         + Math.sin(look.alt) * ed[1]
@@ -607,7 +607,7 @@ function renderFrame() {
         text: 'Earth',
         cls: 'planet',
         priority: -20,
-        ring: Math.max(fPx * (Math.tan(phi + theta) - Math.tan(phi)) + 7, 9),
+        clearPx: Math.max(fPx * (Math.tan(phi + theta) - Math.tan(phi)) + 7, 9),
       });
     }
   }

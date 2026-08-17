@@ -45,7 +45,7 @@ product is and `PRD.md` for the requirements and the decision log.
   (Horizons convention). Altitude is above the horizon.
 - **Sky directions must be projected from the camera, not the origin.** The eye stands
   `groundY + 1.7` above the scene origin, so projecting `dir * R` puts a label ~0.1° off —
-  nothing at 65° FOV, a visible gap between a disc and its ring at 4°.
+  nothing at 65° FOV, a visible offset between a disc and the label beside it at 4°.
 - **Equirect UV derivatives come from the direction, not from `atan2`.** Differentiate the
   direction and chain-rule it (`src/scene/earth.js`); `atan2` jumps at the antimeridian and
   the obvious folded stand-in kinks at ±90°, which over-sharpens the mip in a band there.

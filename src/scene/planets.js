@@ -275,7 +275,7 @@ export function createPlanets(pixelRatio) {
   points.frustumCulled = false;
   points.renderOrder = 2;
 
-  /** Latest per-planet screen size, so the label layer's ring can match. */
+  /** Latest per-planet screen size, so the label layer can clear the disc. */
   const sizePx = new Map();
   let latest = [];
 
@@ -367,7 +367,7 @@ export function createPlanets(pixelRatio) {
       geom.attributes.aGlareFrac.needsUpdate = true;
       geom.attributes.aTakeover.needsUpdate = true;
     },
-    /** Screen size in css px, for the label layer's identification ring. */
+    /** Screen size in css px, for the label layer's clearance around the disc. */
     sizePxOf(name) {
       return sizePx.get(name) ?? 4;
     },

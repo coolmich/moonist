@@ -6,7 +6,8 @@ import * as THREE from 'three';
 // leaking below the horizon, and text with no separation from the graphics.
 //
 // Item: { dir:[x,y,z] scene-frame unit vector, text, cls:'planet'|'star'|'const',
-//         priority (lower = keep first), ring (px radius, planets only) }
+//         priority (lower = keep first), clearPx (drawn radius the label must
+//         clear, planets and the Earth only) }
 
 const FONTS = {
   planet: { px: 12.5, weight: 600, color: [240, 215, 170], alpha: 0.95, caps: false, gap: 10 },
@@ -57,7 +58,7 @@ export function createLabelLayer(container) {
         // The point has to be built from the eye, not from the scene origin:
         // the camera stands a metre or two off it, and a fixed 1 km radius
         // turns that into ~0.1° of parallax — invisible at 65° FOV, but a
-        // 20 px error between a planet's disc and its ring at 4°.
+        // 20 px error between a planet's disc and the label beside it at 4°.
         v.set(it.dir[0], it.dir[1], it.dir[2]).multiplyScalar(1000).add(camera.position);
         v.project(camera);
         if (v.z > 1 || v.z < -1) continue;
@@ -79,18 +80,14 @@ export function createLabelLayer(container) {
         if (f.caps) ctx.font = `${f.weight} ${f.px - 1}px -apple-system, "SF Pro Text", Arial, sans-serif`;
         const w = ctx.measureText(text).width + (f.caps ? text.length * 1.4 : 0);
         const h = f.px + 4;
-        // Ringed objects (planets, the Earth) push their label clear of the ring.
-        const gap = f.gap + (c.ring ? c.ring : 0);
+        // Objects with a drawn disc push their label clear of it.
+        const gap = f.gap + (c.clearPx ? c.clearPx : 0);
         const lx = CENTERED.has(c.cls) ? c.x - w / 2 : c.x + gap;
         const ly = c.y - h / 2;
         // Whole box must be inside the viewport (no truncated words at edges).
-        if (lx < 2 || lx + w > W - 2 || ly < 2 || ly + h > H - 2) {
-          if (c.ring) placed.push({ ...c, text: null }); // still draw the ring
-          continue;
-        }
+        if (lx < 2 || lx + w > W - 2 || ly < 2 || ly + h > H - 2) continue;
         const box = { x: lx - 4, y: ly - 3, w: w + 8, h: h + 6 };
         if (boxes.some((b) => b.x < box.x + box.w && b.x + b.w > box.x && b.y < box.y + box.h && b.y + b.h > box.y)) {
-          if (c.ring) placed.push({ ...c, text: null });
           continue;
         }
         boxes.push(box);
@@ -128,13 +125,6 @@ export function createLabelLayer(container) {
         const layerDim = p.cls === 'compass' ? 1 : dim;
         const a = f.alpha * layerDim * (p.fade ?? 1) * (p.alpha ?? 1);
         if (a <= 0.01) continue;
-        if (p.ring) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.ring, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(${f.color.join(',')},${(a * 0.55).toFixed(3)})`;
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        }
         if (p.tick) {
           // Compass marks sit on the skyline with a short riser above them.
           ctx.beginPath();
@@ -144,7 +134,6 @@ export function createLabelLayer(container) {
           ctx.lineWidth = 1;
           ctx.stroke();
         }
-        if (!p.text) continue;
         ctx.font = `${f.weight} ${f.caps ? f.px - 1 : f.px}px -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif`;
         if (f.caps) {
           ctx.save();

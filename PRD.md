@@ -38,7 +38,7 @@ A realistic simulator of standing on the near side of the Moon and looking at th
 
 ## Product decisions log
 
-- Labels are screen-space (2D canvas layer), not world-space sprites: uniform size, collision declutter by priority (planets → stars by mag → constellations by rank), 160ms fades, dark halos, altitude culling, whole-box viewport insetting. Three visual tiers: constellations UPPERCASE cool-gray, star names neutral, planets warm + identification ring.
+- Labels are screen-space (2D canvas layer), not world-space sprites: uniform size, collision declutter by priority (planets → stars by mag → constellations by rank), 160ms fades, dark halos, altitude culling, whole-box viewport insetting. Three visual tiers: constellations UPPERCASE cool-gray, star names neutral, planets warm. Planets and the Earth carry no drawn circle — the enclosing radius survives only as the clearance that keeps their label off the disc (`clearPx`).
 - Star rendering: size 13·0.74^mag css px (zoom-scaled), intensity 10^(−0.25(mag−3)), B-V→temperature→RGB tint with 1.7-power saturation, 4-point diffraction spikes only below mag 1. No twinkle (vacuum).
 - Duplicate traditional star names (Atik on ο and ζ Per) deduped to the brighter bearer; α Cen pair keeps one label.
 - Camera: drag deltas in camera space (atan px/focal), az compensated by cos(alt) capped 0.15; fling velocity EMA with stationary-release zeroing; eased FOV zoom τ≈110ms. Zenith/nadir "deadness" when dragging horizontally at the pole is inherent alt-az behavior (Stellarium identical) — accepted.
@@ -381,3 +381,10 @@ earth", configurable by dragging, without breaking the physics.
   moved the control to the layers panel, keyboard/aria/focus gaps, and one
   pre-existing phone-width CSS cascade bug. Ten fixed and re-measured, two
   accepted and documented. 38 tests green.
+- 2026-08-17 (rings off): user asked for the gold identification circle around
+  the planets to go. Removed for every ringed object, the Earth included — one
+  code path, and a lone circle left on the Earth would have read as an
+  inconsistency. The radius that drove it is kept as `clearPx`, so labels sit
+  exactly where they did (verified: Saturn's label unmoved at 2.5° FOV between
+  before/after screenshots; the Earth's label still clears the limb at ×10).
+  38 tests green, zero console errors.
