@@ -125,7 +125,7 @@ const FRAG = /* glsl */ `
   // Radii in Earth radii — the same numbers engine.js uses, whose
   // sunObscuration() is this code's node-tested twin.
   const float R_SUN_ER = 109.19793;
-  const float R_MOON_ER = 0.2727044;
+  const float R_MOON_ER = 0.27270445;
 
   // Fraction of a disc of radius rs hidden by a disc of radius ro, centres
   // sep apart: the lens formula, mirrored from engine.js discOverlapFraction.

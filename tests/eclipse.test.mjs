@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import * as Astronomy from 'astronomy-engine';
 import { skyState, solarObscurationAt } from '../src/astro/engine.js';
 
@@ -80,6 +82,21 @@ test('no eclipse, no shadow — a week off new moon the whole planet is clear', 
   for (const [lat, lon] of [[0, 0], [45, -90], [-30, 140], [65, -25]]) {
     assert.equal(solarObscurationAt(when, lat, lon), 0);
   }
+});
+
+test('the shader carries the same radii as the engine', () => {
+  // The GLSL is a hand-maintained transliteration of sunObscuration, and
+  // npm test cannot execute it — but it can pin the two hard-coded constants
+  // that would silently desync the render if anyone edited the engine's radii.
+  const glsl = readFileSync(fileURLToPath(new URL('../src/scene/earth.js', import.meta.url)), 'utf8');
+  const num = (name) => {
+    const m = glsl.match(new RegExp(`const float ${name} = ([0-9.]+);`));
+    assert.ok(m, `${name} not found in earth.js`);
+    return parseFloat(m[1]);
+  };
+  const f32 = Math.fround;
+  assert.equal(f32(num('R_SUN_ER')), f32(695700 / 6371), 'R_SUN_ER drifted from SUN_RADIUS_KM / EARTH_RADIUS_KM');
+  assert.equal(f32(num('R_MOON_ER')), f32(1737.4 / 6371), 'R_MOON_ER drifted from MOON_RADIUS_KM / EARTH_RADIUS_KM');
 });
 
 test('earth.moonPosBody agrees with the sub-lunar point already in the state', () => {

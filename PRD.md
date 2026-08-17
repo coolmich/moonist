@@ -446,7 +446,12 @@ earth", configurable by dragging, without breaking the physics.
   would make every disc exactly round and is what Stellarium defaults to, but it
   bows the horizon 67 px on a 1400 px frame at 65° FOV and 25° tilt, which on a
   surface simulator with real LOLA ridgelines reads worse than the egg, and it
-  would turn every projection in the app nonlinear. 38 tests green.
+  would turn every projection in the app nonlinear. 38 tests green. One
+  precision note: "the Earth does not move" is exact for the projected sphere
+  centre (the warp's fixed point, what `projectDir` reports); the drawn
+  silhouette's own centre sits outboard of it — measured 17.6 px at ×10, 100°
+  FOV, 44.9° off-axis, and 0.17 px at ×1 — so nothing may assume the disc is
+  centred exactly where `projectDir` answers.
 - 2026-08-17 (rings off): user asked for the gold identification circle around
   the planets to go. Removed for every ringed object, the Earth included — one
   code path, and a lone circle left on the Earth would have read as an

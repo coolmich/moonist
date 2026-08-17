@@ -101,7 +101,10 @@ const STYLE = /* css */ `
     /* An absolutely-positioned flex box shrinks to the space to the right of
        its left edge, i.e. half the viewport, and would wrap for no reason;
        max-content sizes it to its actual contents instead. */
-    width: max-content; max-width: calc(100vw - 16px);
+    width: max-content;
+    /* Landscape phones with viewport-fit=cover put the bar's outer controls
+       under the corner cutouts unless both side insets are subtracted. */
+    max-width: calc(100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
     flex-wrap: wrap; justify-content: center; row-gap: 4px;
   }
   #ui-dock .divider { width: 1px; align-self: stretch; background: rgba(255,255,255,0.10); margin: 3px 2px; }
@@ -137,7 +140,8 @@ const STYLE = /* css */ `
   /* ---- popovers over the bar (clock, sky) ---- */
   .pop {
     display: none; flex-direction: column; gap: 2px; padding: 6px;
-    min-width: 216px; max-width: calc(100vw - 16px);
+    min-width: 216px;
+    max-width: calc(100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
   }
   .pop.open { display: flex; }
   .pop .row { display: flex; align-items: center; gap: 7px; padding: 2px; flex-wrap: wrap; }
@@ -254,6 +258,11 @@ const STYLE = /* css */ `
     top: calc(10px + env(safe-area-inset-top, 0px));
     right: calc(10px + env(safe-area-inset-right, 0px));
     display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+  }
+  /* On a phone the capsule can span nearly the whole viewport; the chips
+     drop below its line rather than covering the time and countdown. */
+  @media (max-width: 560px) {
+    #ui-chips { top: calc(48px + env(safe-area-inset-top, 0px)); }
   }
   .chip {
     display: none; align-items: center; gap: 6px;
@@ -576,7 +585,8 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   // through the transient OSD instead of dragging the panels back.
   let chromeHidden = false;
   let hideLessons = (() => {
-    try { return parseInt(localStorage.getItem('moonist.hideHint') || '0', 10) || 0; } catch { return 9; }
+    // No storage means every session is a first session — teach, don't skip.
+    try { return parseInt(localStorage.getItem('moonist.hideHint') || '0', 10) || 0; } catch { return 0; }
   })();
   function setChromeHidden(on) {
     if (chromeHidden === on) return;
@@ -875,7 +885,9 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       // Earth pointer: only when the Earth's disc is genuinely off screen —
       // the whole disc at its displayed (possibly magnified) size.
       const p = view.projectDir(state.earth.sceneDir, state.earth.angRadiusDeg * view.earthScale);
-      if (p.onScreen) {
+      // The chip never floats over an open sheet — it is appended after the
+      // backdrops, so without this it would paint on top of the dialog.
+      if (p.onScreen || openModal) {
         ptr.style.display = 'none';
       } else {
         const w = window.innerWidth, h = window.innerHeight;
@@ -917,11 +929,12 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       const zone = zoneLabel(d);
       const stamp = localMinutes(d);
       // The capsule stays one short line: the date appears only when the sim
-      // has left today — the bar's clock button always carries the full stamp.
+      // has left today, and keeps its year once it has left this year — a
+      // clock reading "08-12 10:45" in a 2100 simulation would be a lie.
       const today = localMinutes(new Date()).slice(0, 10);
-      const when = stamp.slice(0, 10) === today
-        ? stamp.slice(11)
-        : stamp.slice(5).replace('T', ' ');
+      const dispDate = (stamp.slice(0, 4) === today.slice(0, 4) ? stamp.slice(5) : stamp.slice(0, 16))
+        .replace('T', ' ');
+      const when = stamp.slice(0, 10) === today ? stamp.slice(11) : dispDate;
       R.when.textContent = `${when} ${zone} · ${speedLabel}`;
       // Same-day displacement would otherwise pass for the real clock — the
       // one dishonest state left. Same >60s test as the hidden-mode chip.
@@ -940,7 +953,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       if (magnified) earthChip.textContent = `EARTH ${fmtMag(view.earthScale)}`;
       const warp = [];
       if (clock.speed !== 1) warp.push(speedLabel);
-      if (Math.abs(d.getTime() - Date.now()) > 60e3) warp.push(stamp.slice(5).replace('T', ' '));
+      if (Math.abs(d.getTime() - Date.now()) > 60e3) warp.push(dispDate);
       timeChip.classList.toggle('on', chromeHidden && warp.length > 0);
       if (warp.length) timeChip.textContent = `TIME ${warp.join(' · ')}`;
 

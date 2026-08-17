@@ -197,6 +197,9 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
+  // Auto-repeat must not reach the toggles: a held H would strobe the whole
+  // interface and leave its final state to release timing.
+  if (e.repeat) return;
   // Hotkeys keep working while the chrome is hidden; the OSD chip confirms
   // the invisible action rather than dragging the panels back on screen.
   const confirm = (text) => { if (ui?.hidden) ui.osd(text); };
