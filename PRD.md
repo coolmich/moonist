@@ -154,6 +154,15 @@ is the signature of an invented landscape.
   Measured column sharpness at the right limb: 1.59x the disc mean before, 0.57x after.
 - **The Milky Way was too bright**, for the two reasons above it: it rode the earthshine ramp,
   and it carried the catalogue's stars as clipped white cores.
+- **The atmosphere was painted across the disc instead of around it.** Shading the shell from
+  its own normal put a ring 11% brighter than the surface at 0.91 of the radius, on the
+  sunlit side only — a bright arc inside the limb that read as an artefact, because it is
+  one. The depth buffer cannot fix it here: at 200,000 units with near 0.5 and far 2e6, the
+  globe and a shell 6,600 units behind it are ~1e-7 apart in NDC depth, so back-face culling
+  by depth does nothing. The shader now computes each sight line's impact parameter and
+  lights only the rays that miss the surface and graze the air, which from this distance is
+  the one- or two-pixel arc it should be. Radial profile after the fix matches an
+  atmosphere-free control to within a per cent everywhere inside 0.98 R.
 
 ## Known limits
 

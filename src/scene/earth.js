@@ -83,19 +83,38 @@ const FRAG = /* glsl */ `
   }
 `;
 
+// The air, which you can only see where you are looking past the planet.
+//
+// Shading this from the shell's own normal spreads it right across the disc —
+// measured, a ring 11% brighter than the surface at 0.91 of the radius, on the
+// sunlit side only, which is exactly the artefact it looked like. The depth
+// buffer cannot help: with near 0.5 and far 2e6, the globe and the shell 6,600
+// units behind it differ by ~1e-7 in NDC depth, so nothing occludes anything
+// out here. So work out the geometry directly — how close this fragment's line
+// of sight passes to the Earth's centre — and light only the rays that miss the
+// surface and graze the air. From the Moon that is an arc a pixel or two wide.
 const ATMO_FRAG = /* glsl */ `
   precision highp float;
   varying vec3 vObjDir;
   uniform vec3 uSunDirBody;
   uniform vec3 uViewDirBody;
   uniform float uBrightness;
+
+  const float SHELL = 1.016;   // ~100 km of atmosphere over a 6371 km Earth
+
   void main() {
     vec3 n = normalize(vObjDir);
-    float limb = 1.0 - abs(dot(n, uViewDirBody));
-    float rim = pow(clamp(limb, 0.0, 1.0), 2.2);
+    vec3 p = n * SHELL;
+    // Impact parameter: how far this sight line passes from the centre.
+    float pv = dot(p, uViewDirBody);
+    float b = sqrt(max(SHELL * SHELL - pv * pv, 0.0));
+    // Below 1 the line of sight ends on the surface; above SHELL it never
+    // entered the air. Between, it grazes — brightest just above the limb.
+    float arc = smoothstep(0.998, 1.006, b) * (1.0 - smoothstep(1.0, SHELL, b));
     float lit = smoothstep(-0.12, 0.25, dot(n, uSunDirBody));
-    vec3 col = vec3(0.30, 0.52, 1.0) * rim * lit * uBrightness * 0.55;
-    gl_FragColor = vec4(col, rim * lit * 0.9);
+    float a = arc * lit;
+    vec3 col = vec3(0.30, 0.52, 1.0) * a * uBrightness * 1.7;
+    gl_FragColor = vec4(col, a);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -148,12 +167,14 @@ export async function createEarth(renderer) {
     uViewDirBody: uniforms.uViewDirBody,
     uBrightness: uniforms.uBrightness,
   };
+  // Back faces, so each sight line through the shell is shaded once.
   const atmo = new THREE.Mesh(
     new THREE.SphereGeometry(1.016, 96, 72),
     new THREE.ShaderMaterial({
       uniforms: atmoUniforms,
       vertexShader: VERT,
       fragmentShader: ATMO_FRAG,
+      side: THREE.BackSide,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
