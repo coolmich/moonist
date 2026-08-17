@@ -56,7 +56,10 @@ const look = {
 
 const ALT_MIN = -Math.PI / 2 + 0.001;
 const ALT_MAX = Math.PI / 2 - 0.001;
-const FOV_MIN = 4;
+// Zooming in has to reach far enough for a planet to stop being a point:
+// Jupiter is ~45 arcsec, so it only becomes a disc worth the name below about a
+// degree of field. At the old 4° floor nothing could ever resolve.
+const FOV_MIN = 0.5;
 const FOV_MAX = 100;
 
 function applyLook() {
@@ -509,14 +512,17 @@ function renderFrame() {
   }
   if (planets) {
     planets.update(state.planets);
+    const cm = camera.matrixWorld.elements;
+    planets.setSunScreenDir(
+      state.sun.sceneDir,
+      [cm[0], cm[1], cm[2]],   // camera right
+      [cm[4], cm[5], cm[6]],   // camera up
+    );
     planets.updateApparentSizes(look.fov, heightPx);
     planets.setDim(starDim);
-    const zoom = THREE.MathUtils.clamp(
-      heightPx / (2 * Math.tan(look.fov * Math.PI / 360)) / 565, 0.85, 4.0,
-    );
     for (const p of state.planets) {
       if (!aboveSkyline(p.sceneDir)) continue;
-      const sizeCss = THREE.MathUtils.clamp(11 * Math.pow(0.76, p.mag) * zoom, 1.8, 16);
+      const sizeCss = planets.sizePxOf(p.name);
       labelItems.push({
         id: p.name,
         dir: p.sceneDir,

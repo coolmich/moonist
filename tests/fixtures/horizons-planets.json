@@ -1,0 +1,26 @@
+{
+ "source": "JPL Horizons API, fetched 2026-08-17; observer on the lunar surface at Grimaldi (CENTER=coord@301, COORD_TYPE=GEODETIC, MEAN_ME frame, east-positive); QUANTITIES=13 apparent angular diameter in arcsec, 10 illuminated fraction in per cent, 24 sun-target-observer phase angle in degrees; APPARENT=AIRLESS. Saturn's angular diameter is the globe, not the rings.",
+ "site": { "id": "grimaldi", "lat": -5.38, "lon": -68.36 },
+ "epochs": [
+  {
+   "t": "2026-09-05T00:00:00Z",
+   "planets": {
+    "Mercury": { "angDiamArcsec": 4.888973, "illumPercent": 97.09427, "phaseAngleDeg": 19.6349 },
+    "Venus": { "angDiamArcsec": 31.77026, "illumPercent": 36.29647, "phaseAngleDeg": 105.9108 },
+    "Mars": { "angDiamArcsec": 5.129871, "illumPercent": 91.68611, "phaseAngleDeg": 33.5141 },
+    "Jupiter": { "angDiamArcsec": 31.96948, "illumPercent": 99.79924, "phaseAngleDeg": 5.1313 },
+    "Saturn": { "angDiamArcsec": 19.40693, "illumPercent": 99.92463, "phaseAngleDeg": 3.1512 }
+   }
+  },
+  {
+   "t": "2027-03-14T12:00:00Z",
+   "planets": {
+    "Mercury": { "angDiamArcsec": 7.637374, "illumPercent": 49.96060, "phaseAngleDeg": 90.0400 },
+    "Venus": { "angDiamArcsec": 14.16368, "illumPercent": 77.12808, "phaseAngleDeg": 57.1372 },
+    "Mars": { "angDiamArcsec": 12.79756, "illumPercent": 97.64393, "phaseAngleDeg": 17.6541 },
+    "Jupiter": { "angDiamArcsec": 43.67236, "illumPercent": 99.71386, "phaseAngleDeg": 6.1279 },
+    "Saturn": { "angDiamArcsec": 16.12866, "illumPercent": 99.96336, "phaseAngleDeg": 2.1987 }
+   }
+  }
+ ]
+}

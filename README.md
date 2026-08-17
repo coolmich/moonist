@@ -58,7 +58,8 @@ Earth all fit in a single frame.
 
 ## Controls
 
-Drag to look around, wheel to zoom (4°–100° field of view). The bottom dock holds the site
+Drag to look around, wheel to zoom (0.5°–100° field of view — far enough in to see Jupiter
+and Venus as discs, and to catch Venus in crescent). The bottom dock holds the site
 picker, time-lapse speeds and a date jump. Keys: `1`–`5` speed, `0` back to now, `M` Milky
 Way, `C` constellations, `N` star names, `E` snap to the Earth.
 

@@ -22,7 +22,18 @@ const EARTH_RADIUS_KM = 6371.0;
 const SUN_RADIUS_KM = 695700;
 export const SYNODIC_DAYS = 29.530589;
 
+// Equatorial radii, IAU 2015 working group values — the same figure Horizons
+// quotes an apparent angular diameter against (for Saturn, the globe, not the
+// rings). A planet is not a point: Jupiter runs to 50 arcsec, which is what
+// lets it resolve into a disc once the view is zoomed past about a degree.
 const PLANET_BODIES = ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'];
+const PLANET_RADIUS_KM = {
+  Mercury: 2440.53,
+  Venus: 6051.8,
+  Mars: 3396.19,
+  Jupiter: 71492,
+  Saturn: 60268,
+};
 
 function wrap360(d) { return ((d % 360) + 360) % 360; }
 function wrap180(d) { const w = wrap360(d); return w > 180 ? w - 360 : w; }
@@ -176,11 +187,22 @@ export function skyState(date, site) {
   const planets = PLANET_BODIES.map((name) => {
     const geo = scale(vecOf(Astronomy.GeoVector(Astronomy.Body[name], time, false)), AU_KM);
     const v = sub(geo, obsEqjKm);
+    const distKm = length(v);
+    // Phase angle is measured at the planet, between the Sun and this observer.
+    // Taking it from the Moon's surface rather than from Earth's centre matters
+    // least for Jupiter and most for Venus, which can come within 0.3 AU.
+    const toSun = sub(sunVec, v);          // planet → Sun
+    const toObs = negate(v);               // planet → observer
+    const cosPhase = Math.max(-1, Math.min(1, dot(normalize(toSun), normalize(toObs))));
     return {
       name,
       ...altAzOf(v),
       sceneDir: sceneDirOf(v),
       mag: Astronomy.Illumination(Astronomy.Body[name], time).mag,
+      distKm,
+      angRadiusDeg: Math.asin(PLANET_RADIUS_KM[name] / distKm) / DEG,
+      phaseAngleDeg: Math.acos(cosPhase) / DEG,
+      illumFraction: (1 + cosPhase) / 2,
     };
   });
 

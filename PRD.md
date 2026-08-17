@@ -170,6 +170,35 @@ is the signature of an invented landscape.
   the one- or two-pixel arc it should be. Radial profile after the fix matches an
   atmosphere-free control to within a per cent everywhere inside 0.98 R.
 
+## Planets are discs, not dots (2026-08-17)
+
+Reported from dogfooding: planets never changed size no matter how far you zoomed. True, and
+worse than it looked — the sprite was `clamp(11·0.76^mag·zoom, 1.8, 16)`, and every planet
+brighter than about mag 1 sat on that 16 px ceiling from 45° FOV inward, so Venus, Jupiter,
+Mercury, Mars and Saturn were all *the same size as each other* as well as at every zoom.
+
+The deeper cause was that a planet had no angular size in the model at all. It does now:
+`PLANET_RADIUS_KM` (IAU 2015 equatorial radii) with the distance from the observer gives
+`angRadiusDeg`, and the Sun–planet–observer angle gives `phaseAngleDeg` and `illumFraction`,
+all checked against Horizons from the lunar surface — angular diameter to 0.003%, phase angle
+to 0.01°, illuminated fraction to 0.01 points (`tests/fixtures/horizons-planets.json`).
+
+- **A planet is drawn as two things**: the glare any bright point makes in a lens, bounded
+  both in pixels (26) and on the sky (1.5°, so it cannot become a flying saucer at 100° FOV),
+  and the real disc, which grows with magnification. Below about 1.5° of field the disc
+  overtakes the glare and the glare drops to a 9% bloom around it.
+- **The disc carries its phase.** Venus reaches 66 arcsec as a thin crescent; drawing it round
+  once resolved would trade one wrong picture for another. The terminator comes from the true
+  phase angle and faces the Sun's actual direction on screen.
+- **Zoom now reaches 0.5°** (was 4°), because at 4° Jupiter is 2.6 px and nothing could ever
+  resolve. At 0.5° Jupiter is ~14 px and Venus up to ~29 px.
+- Two sign conventions here were settled by measurement, not reasoning, after both plausible
+  readings produced a crescent facing the wrong way: the screen direction to the Sun is
+  computed in JS from the camera's own axes (projecting two nearby points collapses when the
+  Sun is close to the planet, which is exactly when crescents matter), and the terminator's
+  softening width is one pixel expressed in disc radii — using the sprite-space radius instead
+  smears it across the whole disc and looks like a phase error.
+
 ## Known limits
 
 - The star catalogue is J2000 with no proper motion or aberration: the fastest-
@@ -183,7 +212,8 @@ is the signature of an invented landscape.
   photograph would resolve more stars. The catalogue's own 5,044 stars stay sharp at any zoom.
 - The map still contains stars fainter than the catalogue's mag-6 limit, down to Gaia depth.
   Those are the point of it — they are the grain the band is made of — but a texel is 2.6
-  arcmin, so at the 4° zoom limit the brightest of them are soft dots rather than points.
+  arcmin, so at the 0.5° zoom limit it is magnified some 70x and reads as a smooth glow. The
+  band is smooth at that scale anyway, but nothing there is sharp.
   The 5,044 stars the app draws itself are subtracted from the map, so nothing is drawn twice.
 
 ## Checkpoints

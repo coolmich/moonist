@@ -211,3 +211,33 @@ test('planets present with sane magnitudes', () => {
   const venus = s.planets.find((p) => p.name === 'Venus');
   assert.ok(venus.mag < -3 && venus.mag > -5, `venus mag ${venus.mag}`);
 });
+
+test('planet discs and phases match JPL Horizons from the lunar surface', () => {
+  // A planet is not a point: this is what lets Jupiter resolve into a disc
+  // when the view is zoomed in, and what makes Venus a crescent rather than a
+  // dot. Ground truth is Horizons' own apparent angular diameter, illuminated
+  // fraction and phase angle for an observer standing at Grimaldi.
+  const planetFix = JSON.parse(readFileSync(
+    fileURLToPath(new URL('./fixtures/horizons-planets.json', import.meta.url)), 'utf8',
+  ));
+  const site = SITES_ALL.find((s) => s.id === planetFix.site.id);
+  assert.ok(site, 'Grimaldi is still a site');
+  assert.equal(+site.lat.toFixed(2), planetFix.site.lat);
+  assert.equal(+site.lon.toFixed(2), planetFix.site.lon);
+
+  for (const epoch of planetFix.epochs) {
+    const s = skyState(new Date(epoch.t), site);
+    for (const [name, truth] of Object.entries(epoch.planets)) {
+      const p = s.planets.find((x) => x.name === name);
+      assert.ok(p, `${name} missing`);
+      const angDiam = p.angRadiusDeg * 2 * 3600;
+      const relErr = Math.abs(angDiam / truth.angDiamArcsec - 1);
+      assert.ok(relErr < 0.002,
+        `${name} @ ${epoch.t}: angular diameter ${angDiam.toFixed(3)}" vs Horizons ${truth.angDiamArcsec}" (${(relErr * 100).toFixed(2)}%)`);
+      assert.ok(Math.abs(p.phaseAngleDeg - truth.phaseAngleDeg) < 0.05,
+        `${name} @ ${epoch.t}: phase angle ${p.phaseAngleDeg.toFixed(3)}° vs ${truth.phaseAngleDeg}°`);
+      assert.ok(Math.abs(p.illumFraction * 100 - truth.illumPercent) < 0.1,
+        `${name} @ ${epoch.t}: ${(p.illumFraction * 100).toFixed(2)}% lit vs ${truth.illumPercent}%`);
+    }
+  }
+});
