@@ -208,7 +208,7 @@ const STYLE = /* css */ `
   .sheet .close:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
   .card {
-    display: grid; grid-template-columns: 1fr auto; gap: 3px 16px;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 3px 14px;
     width: 100%; text-align: left;
     background: rgba(255, 255, 255, 0.035);
     border: 1px solid rgba(255, 255, 255, 0.075);
@@ -219,13 +219,26 @@ const STYLE = /* css */ `
   }
   .card:hover { border-color: rgba(127, 178, 234, 0.5); background: rgba(70, 115, 175, 0.16); }
   .card[aria-current="true"] { border-color: rgba(127, 178, 234, 0.7); background: rgba(70, 115, 175, 0.13); }
-  .card .name { grid-column: 1; font-size: 13px; font-weight: 620; color: #e8edf4; }
+  /* Where on the Moon this site is: the near-side disc with the point pinned,
+     north up, east right — the Moon as it faces the Earth. */
+  .card .moonprev {
+    grid-column: 1; grid-row: 1 / span 2; align-self: center;
+    position: relative; width: 54px; height: 54px;
+  }
+  .card .moonprev img { width: 100%; height: 100%; display: block; }
+  .card .moonprev .pin {
+    position: absolute; width: 7px; height: 7px; border-radius: 50%;
+    background: #7fb2ea; border: 1.5px solid rgba(5, 8, 12, 0.9);
+    box-shadow: 0 0 5px rgba(127, 178, 234, 0.9);
+    transform: translate(-50%, -50%);
+  }
+  .card .name { grid-column: 2; font-size: 13px; font-weight: 620; color: #e8edf4; }
   .card .earth {
-    grid-column: 2; grid-row: 1 / span 2; align-self: center; text-align: right;
+    grid-column: 3; grid-row: 1 / span 2; align-self: center; text-align: right;
     color: #8fb6e0; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600;
   }
   .card .earth small { display: block; color: #78828f; font-size: 10.5px; font-weight: 400; }
-  .card .blurb { grid-column: 1; color: #97a1ae; }
+  .card .blurb { grid-column: 2; color: #97a1ae; }
 
   .credits-list { margin: 0; padding: 0; list-style: none; font-size: 12px; line-height: 1.6; }
   .credits-list li { padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.07); color: #a9b3c0; }
@@ -362,6 +375,17 @@ const CREDITS = [
   ['Tycho-2 catalogue, via VizieR', '349,405 more stars to magnitude 10, revealed by zoom', 'ESA Hipparcos mission — Høg et al. 2000'],
   ['NASA SVS Deep Star Maps 2020', 'the Milky Way, rendered from 1.7 billion catalogued stars', 'NASA/Goddard SVS; Gaia DR2: ESA/Gaia/DPAC'],
 ];
+
+/**
+ * Orthographic near-side disc position of a selenographic point: x east
+ * (right), y north (up), unit disc — the Moon exactly as it faces the Earth,
+ * matching public/textures/moonface.webp. Node-tested against landmarks.
+ */
+export function moonPinXY(latDeg, lonDeg) {
+  const lat = latDeg * Math.PI / 180;
+  const lon = lonDeg * Math.PI / 180;
+  return { x: Math.sin(lon) * Math.cos(lat), y: Math.sin(lat) };
+}
 
 function fmtAlt(deg) {
   return `${deg < 0 ? '−' : ''}${Math.abs(deg).toFixed(1)}°`;
@@ -729,7 +753,10 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   const cards = SITES.map((s) => {
     const c = el('button', 'card', picker.sheet);
     c.type = 'button';
+    const pin = moonPinXY(s.lat, s.lon);
     c.innerHTML =
+      `<span class="moonprev"><img src="/textures/moonface.webp" alt="">` +
+      `<i class="pin" style="left:${(50 + pin.x * 50).toFixed(1)}%;top:${(50 - pin.y * 50).toFixed(1)}%"></i></span>` +
       `<span class="name">${s.name}</span>` +
       `<span class="earth" data-earth="${s.id}">—<small>Earth</small></span>` +
       `<span class="blurb">${s.blurb}</span>`;
