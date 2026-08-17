@@ -10,9 +10,12 @@ product is and `PRD.md` for the requirements and the decision log.
   lunar surface; if a test fails, the code is wrong, not the fixture. New astronomical
   behaviour needs a new external cross-check (Horizons, Fourmilab, or astronomy-engine's own
   independent search functions), not a self-consistent assertion.
-- **Physical correctness beats familiarity.** A black daytime sky, an Earth that never moves,
-  a surface that is nearly invisible during lunar night with a dark Earth — these are correct.
-  Do not "fix" them.
+- **Physical correctness beats familiarity.** A black daytime sky *still full of stars*, an
+  Earth that never moves, a surface that is nearly invisible during lunar night with a dark
+  Earth — these are correct. Do not "fix" them. In particular nothing here dims a star: with
+  no air to scatter sunlight, the sky at noon holds what it holds at midnight, and the sky's
+  brightness is deliberately held independent of the exposure ramp (`NIGHT_BASE / E` in
+  `lighting.js`), which exists only so the ground stays visible.
 - **Where display choices override physics, say so in a comment.** The exposure model and the
   constant-brightness sky objects are deliberate camera-like compromises; they are marked.
 

@@ -37,7 +37,7 @@ export function createLighting(scene, renderer) {
 
   return {
     /**
-     * Returns { starDim, earthBrightness } for the sky modules.
+     * Returns { starDim, earthBrightness, uiDim } for the sky modules.
      * dtReal = wall-clock seconds since last frame (smoothing).
      */
     update(state, dtReal) {
@@ -47,12 +47,10 @@ export function createLighting(scene, renderer) {
       const earthUp = THREE.MathUtils.smoothstep(state.earth.alt, -1, 2);
       const earthGlow = earthUp * state.earth.illumFraction;
 
-      // How much light the scene is actually taking, which is not the same as
-      // the Sun being up: at grazing incidence the ground receives sin(alt) of
-      // its noon illuminance, so the first few degrees of a lunar dawn are
-      // genuinely dim and a camera stays open through them. Keying exposure to
-      // this instead of to sunrise itself is what lets the stars survive a
-      // sunrise, which is correct — there is no air here to put them out.
+      // How hard the Sun is lighting the ground, which is not the same as the
+      // Sun being up: at grazing incidence it delivers sin(alt) of its noon
+      // illuminance, so a lunar dawn is genuinely dim and comes on gradually.
+      // This drives the ground's exposure, and nothing else.
       const dayLoad = sunUp * THREE.MathUtils.smoothstep(
         Math.sin(Math.max(state.sun.alt, 0) * Math.PI / 180), 0, 0.1,
       );
@@ -89,19 +87,23 @@ export function createLighting(scene, renderer) {
       renderer.toneMappingExposure = current.exposure;
 
       const E = current.exposure;
-      // Sunlit ground floods the camera, so the stars go with it — the reason
-      // the Apollo surface photographs have empty black skies.
-      const daylightWash = 1 - 0.94 * dayLoad;
-      // ...but the earthshine half of that ramp exists only so the ground stays
-      // visible as the Earth waxes, and the sky has no business riding it: a
-      // fuller Earth does not make the Milky Way brighter. Divide that part of
-      // the exposure back out so sky brightness depends on the Sun alone.
-      const skyHold = (0.9 * dayLoad + (1 - dayLoad) * NIGHT_BASE) / E;
+      // Nothing on the Moon can dim a star. There is no air to scatter sunlight
+      // into the line of sight, so the sky is exactly as bright at noon as at
+      // midnight: the same stars, the same Milky Way, over a sunlit landscape.
+      // Only a camera metering that landscape would lose them — sunlit regolith
+      // is 24 stops brighter than the Milky Way's band — and no display has
+      // 24 stops, so this one shows both and marks the daylight with a small
+      // deliberate dip rather than pretending the sky went out.
+      const daylightDim = 1 - 0.3 * dayLoad;
+      // The exposure ramp exists for the ground: it opens through the night so
+      // earthshine-lit regolith stays visible, and closes under the Sun. The sky
+      // has no business riding either half of it — a fuller Earth cannot
+      // brighten the Milky Way — so divide it back out and let the sky hold.
+      const skyHold = NIGHT_BASE / E;
       return {
-        // Stars, planets and the Milky Way are scene-linear and tone-mapped:
-        // they wash out under a sunlit surface and hold steady through the
-        // night whatever the Earth is doing.
-        starDim: daylightWash * skyHold,
+        // Stars, planets and the Milky Way keep a steady brightness through the
+        // whole lunar day, dipping slightly while the Sun is up.
+        starDim: daylightDim * skyHold,
         // The Earth IS exposure-compensated. Its true brightness against the
         // earthshine-lit ground is a ratio of order a million to one; holding
         // its appearance steady is a deliberate camera-like compromise so the
@@ -109,7 +111,7 @@ export function createLighting(scene, renderer) {
         earthBrightness: (1.35 + 0.25 * (1 - dayLoad)) / E,
         // The 2D label layer composites outside tone mapping entirely, so it
         // takes a plain 0..1 factor.
-        uiDim: 0.3 + 0.7 * daylightWash,
+        uiDim: 0.3 + 0.7 * daylightDim,
       };
     },
   };

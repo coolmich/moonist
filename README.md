@@ -28,12 +28,13 @@ horizon out by the limb.
 cycle takes 29.53. The readout gives you the local solar clock and how many Earth days you
 are from the next sunrise, because "06:00" means something very different here.
 
-**The sky is black in daylight.** There is no atmosphere to scatter sunlight, so nothing here
-can dim a star — the stars never go away. What hides them is the camera: the exposure that
-makes sunlit regolith look right leaves them invisible, exactly as in the Apollo photographs.
-Because a grazing Sun lights the ground at only sin(altitude) of its noon strength, that
-happens gradually — the stars survive sunrise and fade over the first few degrees, and at
-night the exposure opens up and the ground appears again, lit blue-grey by earthshine.
+**The stars never go out.** There is no atmosphere to scatter sunlight, so nothing here can
+dim a star: at lunar noon the sky holds exactly what it holds at midnight, the Milky Way
+included, hanging over a brightly sunlit landscape. The Apollo photographs show empty black
+skies because their exposure was set for the regolith — which is 24 stops brighter than the
+Milky Way — and no camera or screen has that range. Rather than pick one end, this shows both
+and dims the sky slightly while the Sun is up. At night the exposure opens up and the ground
+appears again, lit blue-grey by earthshine.
 
 **Earth's phase is the Moon's phase, inverted.** When Earth sees a new Moon, the Moon sees a
 full Earth. When the Earth passes directly between the Sun and the Moon — a lunar eclipse for

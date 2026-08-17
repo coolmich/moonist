@@ -73,20 +73,24 @@ three.js only injects the *helpers*. Because the sky shaders omitted them, the
 JS-side "divide by exposure, the renderer multiplies it back" contract silently
 failed and sky brightness ran backwards. The rule now:
 
-- **Ground, stars, planets and the Milky Way** are scene-linear and tone-mapped.
-  They wash out at lunar noon, which is why the Apollo surface photographs have
-  empty skies. The Milky Way belongs in this list on physical grounds, not just
-  for consistency: it *is* the stars, the ones too faint to draw individually.
-- **The sky does not ride the earthshine ramp.** Night exposure climbs with
-  earthshine so the lit ground stays visible; that is a device for the ground.
-  A fuller Earth cannot make the Milky Way brighter — there is no air to scatter
-  its light — so sky objects divide that part of the exposure back out and hold
-  steady through the month. Only the Sun changes how bright the sky reads.
-- **Daylight wash follows illuminance, not sunrise.** The ground takes sin(alt)
-  of its noon light, so the Sun clearing the horizon barely lights anything and
-  the camera stays open through it. Keying the wash to the Sun merely being up
-  put the stars out the instant it rose, which looked like an atmosphere doing
-  it. They now fade across the first ~6° of altitude, about half an Earth day.
+- **Nothing here can dim a star, and the sky is drawn that way.** There is no air
+  to scatter sunlight into the line of sight, so the sky at lunar noon holds
+  exactly what it holds at midnight: same stars, same Milky Way, over a sunlit
+  landscape. Only a camera metering that landscape would lose them — sunlit
+  regolith measures ~4,900 cd/m² against the Milky Way's ~2.7e-4, a ratio of
+  **24 stops** — and no display has 24 stops. Rather than pick one end and
+  pretend the other went out, the sky keeps a steady brightness all month and
+  takes a small deliberate dip (×0.7) while the Sun is up, as a cue rather than
+  as physics. The Apollo surface photographs are empty because their exposure
+  was set for the regolith, which is a fact about the film, not about the sky.
+- **The sky does not ride the exposure ramp at all.** Exposure climbs through the
+  night so earthshine-lit ground stays visible and closes under the Sun; that is
+  a device for the *ground*. A fuller Earth cannot brighten the Milky Way, so sky
+  objects divide the whole ramp back out (`NIGHT_BASE / E`) and hold.
+- **The ground's exposure follows illuminance, not sunrise.** It takes sin(alt)
+  of its noon light, so a grazing Sun lights it faintly and lunar dawn comes up
+  over the first ~6° of altitude — about half an Earth day — rather than
+  snapping on the moment the Sun clears the horizon.
 - **The Earth** *is* exposure-compensated (`K / E`). Its real brightness against
   earthshine-lit ground is a ratio of order 10⁶; holding its appearance steady
   is a deliberate camera-like compromise so the hero object stays readable.
@@ -135,8 +139,10 @@ is the signature of an invented landscape.
 
 ## Dogfood round, 2026-08-16 (all five findings were real)
 
-- **Nothing on the Moon can dim a star, and the code was pretending otherwise.** See the
-  radiometry rule above: the wash now follows ground illuminance, so stars survive a sunrise.
+- **Nothing on the Moon can dim a star, and the code was pretending otherwise.** The wash used
+  to take the sky down to 6% the moment the Sun cleared the horizon, which is what an
+  atmosphere would do, not a vacuum. The sky now holds its night brightness through the whole
+  lunar day and only dips to 70% under the Sun. See the radiometry rule above.
 - **Procedural detail must be band-limited to whatever carries it.** The ground's grain was
   differenced over a fixed 3 cm step while its finest octave has a 4 cm wavelength, so what
   reached the screen was the noise lattice, not dust: a grid of identical dimples marching in
