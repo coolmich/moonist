@@ -24,11 +24,86 @@ const CLOUD_REFRESH_MS = 3 * 3600 * 1000;
 const CLOUD_W_BASE = 4096;
 const CLOUD_W_DEEP = 8192;
 
+// --------------------------------------------------------------------------
+// The round-disc magnifier. Display choice, not physics — see PRD.
+//
+// A rectilinear projection draws an off-axis sphere as an ellipse stretched
+// along the screen radius by sec(phi): 1.30 at 39.5° off-axis, measured, with
+// the area up sec³(phi). That is correct, and it is what a wide lens does. At
+// the Earth's true 1.87° it is also invisible — a 21 x 16 px disc at 100° fov,
+// 5 px of stretch. But the magnifier draws the disc up to ten times that, and
+// a 19°-wide sphere 40° off-axis cannot be round in a rectilinear frame: the
+// egg in the corner is 50 px of it.
+//
+// So squash the drawn mesh back, in clip space, along the screen radius
+// through the disc centre. An anisotropic scale by a_t/a_r maps the ellipse
+// exactly onto a circle; done about the projection of the disc centre it is a
+// fixed point, so the Earth does not move, depth is untouched, and not one
+// star is displaced. What is given up is that the limb no longer marks where
+// an occultation would happen — which at x10, where the disc is ten times too
+// big, it did not mark anyway.
+//
+// Projecting the silhouette cone (half-angle rho, off-axis phi) onto the image
+// plane gives semi-axes a_r = cos(rho)sin(rho)/P and a_t = sin(rho)/sqrt(P)
+// with P = cos²(rho) − sin²(phi), so the ratio is sqrt(1 − (sin phi/cos rho)²)
+// — which is 1/sec(phi) in the small-disc limit, as it must be.
+
+/**
+ * How much of the projection's radial stretch to take out of the drawn disc,
+ * as a factor on its radial extent. 1 = leave the geometry exactly as it is.
+ *
+ * The correction is ramped by 1 − 1/S rather than switched on, because at S = 1
+ * the ellipse is the truth and must be left alone, and the dial is continuous:
+ * a step would pop. 1 − 1/S is the fraction of the drawn radius the dial made
+ * up, so this undoes the stretch on the fabricated part and no more.
+ *
+ * @param cosPhi     cosine of the angle between the view axis and the disc
+ * @param rhoRad     angular radius of the disc AS DRAWN (magnified), radians
+ * @param scale      the magnifier's setting
+ */
+export function discSquash(cosPhi, rhoRad, scale) {
+  if (!(scale > 1) || !(cosPhi > 1e-6)) return 1;
+  const sinPhi = Math.sqrt(Math.max(1 - cosPhi * cosPhi, 0));
+  const s = sinPhi / Math.cos(rhoRad);
+  if (!(s < 1)) return 1; // disc straddles the 90° cone; nothing sane on screen
+  return Math.pow(Math.sqrt(1 - s * s), 1 - 1 / scale);
+}
+
+/**
+ * Build the clip-space squash. `sr`/`su` are the disc direction's components
+ * along the camera's right and up axes — the screen radius points that way.
+ */
+function setWarp(m, k, cosPhi, sr, su, camera) {
+  const sinPhi = Math.hypot(sr, su);
+  if (k === 1 || sinPhi < 1e-9 || !(cosPhi > 1e-6)) return m.identity();
+  const nx = sr / sinPhi;
+  const ny = su / sinPhi;
+  // NDC x spans the same [-1, 1] as y over an `aspect` times wider frame, so
+  // the off-diagonals carry that factor: the scale is isotropic in pixels.
+  const a = camera.aspect;
+  const g = k - 1;
+  const m00 = 1 + g * nx * nx;
+  const m01 = (g * nx * ny) / a;
+  const m10 = g * nx * ny * a;
+  const m11 = 1 + g * ny * ny;
+  // Disc centre in NDC, held fixed so the squash cannot shift the Earth.
+  const t = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const cx = sr / (cosPhi * a * t);
+  const cy = su / (cosPhi * t);
+  return m.set(
+    m00, m01, 0, (1 - m00) * cx - m01 * cy,
+    m10, m11, 0, (1 - m11) * cy - m10 * cx,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  );
+}
+
 const VERT = /* glsl */ `
+  uniform mat4 uWarp;
   varying vec3 vObjDir;
   void main() {
     vObjDir = normalize(position);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    gl_Position = uWarp * projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
@@ -200,6 +275,7 @@ export async function createEarth(renderer) {
     uViewDirBody: { value: new THREE.Vector3(1, 0, 0) },
     uViewDistBody: { value: 60.0 }, // viewer distance in globe radii
     uBrightness: { value: 1.0 },
+    uWarp: { value: new THREE.Matrix4() },
   };
 
   const globe = new THREE.Mesh(
@@ -212,6 +288,7 @@ export async function createEarth(renderer) {
     uViewDirBody: uniforms.uViewDirBody,
     uViewDistBody: { value: 60.0 }, // NOT shared: tracks the mesh as drawn
     uBrightness: uniforms.uBrightness,
+    uWarp: uniforms.uWarp, // shared: the shell must squash with the globe
   };
   // Back faces, so each sight line through the shell is shaded once.
   const atmo = new THREE.Mesh(
@@ -301,7 +378,7 @@ export async function createEarth(renderer) {
       cloudWidth = CLOUD_W_DEEP;
       if (!cloudFetchInFlight) refreshClouds();
     },
-    update(state) {
+    update(state, camera) {
       if (Date.now() > nextCloudFetch) {
         nextCloudFetch = Date.now() + CLOUD_REFRESH_MS; // don't stack requests
         refreshClouds();
@@ -347,6 +424,15 @@ export async function createEarth(renderer) {
       const viewBody = mulMV(mt, [-e.sceneDir[0], -e.sceneDir[1], -e.sceneDir[2]]);
       uniforms.uSunDirBody.value.set(sunBody[0], sunBody[1], sunBody[2]).normalize();
       uniforms.uViewDirBody.value.set(viewBody[0], viewBody[1], viewBody[2]).normalize();
+
+      // Take the projection's radial stretch back out of the magnified disc.
+      const cm = camera.matrixWorld.elements;
+      const d = e.sceneDir;
+      const cosPhi = -(d[0] * cm[8] + d[1] * cm[9] + d[2] * cm[10]); // −Z is forward
+      const sr = d[0] * cm[0] + d[1] * cm[1] + d[2] * cm[2];         // camera right
+      const su = d[0] * cm[4] + d[1] * cm[5] + d[2] * cm[6];         // camera up
+      const rho = e.angRadiusDeg * displayScale * Math.PI / 180;
+      setWarp(uniforms.uWarp.value, discSquash(cosPhi, rho, displayScale), cosPhi, sr, su, camera);
     },
     setBrightness(v) {
       uniforms.uBrightness.value = v;

@@ -7,7 +7,7 @@ import { createMilkyWay } from './scene/milkyway.js';
 import { createStarfield, starNameMagCut } from './scene/starfield.js';
 import { createPlanets } from './scene/planets.js';
 import { createLabelLayer } from './scene/labels2d.js';
-import { createEarth } from './scene/earth.js';
+import { createEarth, discSquash } from './scene/earth.js';
 import { createSun } from './scene/sun.js';
 import { createTerrain, EYE } from './scene/terrain.js';
 import { createLighting } from './scene/lighting.js';
@@ -391,7 +391,9 @@ const view = {
       );
       const phi = Math.min(Math.acos(cosPhi), 1.35);
       const f = window.innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
-      rPx = f * (Math.tan(phi) - Math.tan(phi - theta));
+      // A radius is only ever passed for the Earth, and the magnifier squashes
+      // its drawn reach back along this same screen radius.
+      rPx = f * (Math.tan(phi) - Math.tan(phi - theta)) * discSquash(cosPhi, theta, earthScale);
     }
     const pad = 60 - rPx;
     return {
@@ -581,7 +583,7 @@ function renderFrame() {
   }
   if (earth) {
     earth.setScale(earthScale);
-    earth.update(state);
+    earth.update(state, camera);
     earth.setBrightness(earthBrightness);
     const fPx = heightPx / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
     const theta = THREE.MathUtils.degToRad(state.earth.angRadiusDeg * earthScale);
@@ -605,13 +607,16 @@ function renderFrame() {
       // Clamp so tan stays sane when the disc is far off-axis (the label is
       // culled off screen there anyway).
       const phi = Math.min(Math.acos(THREE.MathUtils.clamp(cosPhi, -1, 1)), 1.35 - theta);
+      // ...less whatever the magnifier squashes back out of that reach, or the
+      // label stands off a disc edge that is no longer there.
+      const squash = discSquash(Math.cos(phi), theta, earthScale);
       labelItems.push({
         id: 'earth',
         dir: state.earth.sceneDir,
         text: 'Earth',
         cls: 'planet',
         priority: -20,
-        clearPx: Math.max(fPx * (Math.tan(phi + theta) - Math.tan(phi)) + 7, 9),
+        clearPx: Math.max(fPx * (Math.tan(phi + theta) - Math.tan(phi)) * squash + 7, 9),
       });
     }
   }

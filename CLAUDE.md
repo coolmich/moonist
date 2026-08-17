@@ -46,6 +46,12 @@ product is and `PRD.md` for the requirements and the decision log.
 - **Sky directions must be projected from the camera, not the origin.** The eye stands
   `groundY + 1.7` above the scene origin, so projecting `dir * R` puts a label ~0.1° off —
   nothing at 65° FOV, a visible offset between a disc and the label beside it at 4°.
+- **Every Earth mesh must carry `uWarp`.** The magnified disc is de-stretched by a
+  clip-space squash applied in the Earth's vertex shader (`gl_Position = uWarp * ...`), which
+  is what keeps it round off-axis; a new material on that group without the uniform renders
+  an ellipse next to a circle. It is identity at ×1 by construction, so the physical path is
+  untouched. `discSquash()` is exported because the label clearance and the off-screen chip
+  have to shrink with the disc — anything else that measures the drawn limb needs it too.
 - **Equirect UV derivatives come from the direction, not from `atan2`.** Differentiate the
   direction and chain-rule it (`src/scene/earth.js`); `atan2` jumps at the antimeridian and
   the obvious folded stand-in kinks at ±90°, which over-sharpens the mip in a band there.

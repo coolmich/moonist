@@ -306,6 +306,39 @@ earth", configurable by dragging, without breaking the physics.
   fixed a pre-existing phone-width bug: the ≤560 px media block preceded the base
   `#ui-layers` rule it overrides (equal specificity, source order decides), stretching the
   layer toggles into a 716 px-tall wall.
+- **The dial also voided the projection, and that one is fixed too — the round disc.** A
+  rectilinear projection draws an off-axis sphere as an ellipse stretched along the screen
+  radius by sec φ, with the area up sec³φ: measured 1.308 against a predicted 1.296 at 39.5°
+  off-axis, across a sweep from 10° to 50° that tracks sec φ to three decimals. That is
+  correct, and it is what a wide lens does. It is also invisible at the Earth's true 1.87° —
+  a 21 × 16 px disc at 100° FOV, 5 px of stretch — because the ratio is the same at every
+  size and only the absolute pixels show. The dial draws that disc 19° wide, and then the
+  same ratio is 50 px of egg in the corner of the frame, which is what the user reported.
+  So squash the drawn mesh back in clip space, along the screen radius through the disc
+  centre, in the Earth's own vertex shader (`uWarp`, shared by the globe and the shell so
+  they cannot part company). Projecting the silhouette cone gives semi-axes
+  a_r = cos ρ sin ρ/P and a_t = sin ρ/√P with P = cos²ρ − sin²φ, so an anisotropic scale by
+  a_t/a_r = √(1 − (sin φ/cos ρ)²) — which is 1/sec φ in the small-disc limit, as it must be —
+  maps the ellipse exactly onto a circle. Done about the projection of the disc centre, that
+  point is a fixed point: the Earth does not move, z and w are untouched so depth and
+  occlusion are unchanged, and not one star is displaced. Note this is *not* a global
+  projection change: it is a per-object correction, the same trick phone cameras use on
+  faces at frame edges (Shih et al., SIGGRAPH 2019), and it is available here for free
+  because the mask is one sphere whose position and radius are already known exactly.
+- **Ramped by 1 − 1/S, not switched on.** At ×1 the ellipse *is* the truth and is left
+  exactly alone — `discSquash` returns 1 and the matrix is identity, so the physical path is
+  bit-for-bit what it was. 1 − 1/S is the fraction of the drawn radius the dial fabricated,
+  so the correction undoes the stretch on the invented part and no more; and since the
+  slider is continuous and log-mapped, a step at ×1 would have popped. Residual aspect at
+  39.5° off-axis: 1.30 at ×1 (untouched), 1.14 at ×2, 1.07 at ×4, 1.03 at ×10.
+- **What that gives up**: the limb no longer marks where an occultation of a star would
+  happen. At ×10, where the disc is ten times too big, it did not mark anything anyway — and
+  at ×1 the correction is identity, so where the limb is meaningful it is also exact. The
+  label clearance and the off-screen chip's penetration both scale by the same factor, so
+  they keep hugging the disc as it is actually drawn. One conservatism left alone: the label
+  *occluder* is still an angular test at the magnified radius, so it suppresses labels in a
+  band up to ~26 px wide outside the squashed limb at ×10 — it errs toward hiding, never
+  toward a label landing on the Earth.
 - **Accepted, documented, not fixed**: the enlarged mesh is geometrically a *closer* Earth,
   so the visible cap shrinks from 89.0° to 80.5° at ×10 — the outer ~1.4% of the true disc,
   already foreshortened to invisibility at ×1, slips out of frame as the dial rises. A
@@ -321,6 +354,13 @@ earth", configurable by dragging, without breaking the physics.
   65°/×10) and never with a slab visible; the dock stays one row at 880–1024 px and across
   site changes; one arrow press ticks ×1.0 → ×1.1 with matching `aria-valuetext`; zero
   console errors.
+- Round disc verified against the analytic silhouette by reading back the framebuffer at
+  100° FOV, 1400 × 910, full Earth so no terminator truncates the chord. Disc extents
+  radial × tangential, measured against predicted: ×2 37 × 33 (38 × 34), ×4 71 × 67
+  (72 × 67), ×10 178 × 170 (176 × 172) — every one within 2 px, where an uncorrected ×10
+  disc measures 215 × 164. At 25° off-axis, ×10 gives 146 × 145 against 147 × 145. Measured
+  aspect runs ~2% above predicted at ×10, which is the ±1 px the limb threshold costs on
+  each edge, not a residue of the projection. 38 tests green.
 
 ## Known limits
 
@@ -384,6 +424,19 @@ earth", configurable by dragging, without breaking the physics.
   moved the control to the layers panel, keyboard/aria/focus gaps, and one
   pre-existing phone-width CSS cascade bug. Ten fixed and re-measured, two
   accepted and documented. 38 tests green.
+- 2026-08-17 (round disc): user reported the magnified Earth going egg-shaped
+  off-centre and asked what the trade-off was. Measured it first: the stretch is
+  exactly sec φ (1.308 against 1.296 predicted at 39.5° off-axis), so the
+  renderer was right and the projection was the cause — and the ratio is
+  identical at every FOV, so capping the field would not have touched it. What
+  made it visible was the magnifier: 5 px of stretch on a true-size disc, 50 px
+  on a ×10 one. Fixed as a clip-space squash by √(1 − (sin φ/cos ρ)²) along the
+  screen radius, in the Earth's vertex shader only, ramped by 1 − 1/S so ×1 is
+  identity. Rejected the alternative of a global stereographic projection: it
+  would make every disc exactly round and is what Stellarium defaults to, but it
+  bows the horizon 67 px on a 1400 px frame at 65° FOV and 25° tilt, which on a
+  surface simulator with real LOLA ridgelines reads worse than the egg, and it
+  would turn every projection in the app nonlinear. 38 tests green.
 - 2026-08-17 (rings off): user asked for the gold identification circle around
   the planets to go. Removed for every ringed object, the Earth included — one
   code path, and a lone circle left on the Earth would have read as an
