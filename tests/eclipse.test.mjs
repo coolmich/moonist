@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as Astronomy from 'astronomy-engine';
-import { skyState, solarObscurationAt } from '../src/astro/engine.js';
+import {
+  skyState, solarObscurationAt,
+  SUN_RADIUS_KM, MOON_RADIUS_KM, EARTH_RADIUS_KM,
+} from '../src/astro/engine.js';
 
 // The Moon's shadow on the Earth — the geometry behind the eclipse smudge the
 // Earth shader draws. Cross-checked against astronomy-engine's *independent*
@@ -94,9 +97,12 @@ test('the shader carries the same radii as the engine', () => {
     assert.ok(m, `${name} not found in earth.js`);
     return parseFloat(m[1]);
   };
+  // Against the ENGINE's constants, not literals repeated here — otherwise
+  // editing a radius in engine.js leaves shader and test agreeing with each
+  // other while both disagree with the physics (mutation-tested).
   const f32 = Math.fround;
-  assert.equal(f32(num('R_SUN_ER')), f32(695700 / 6371), 'R_SUN_ER drifted from SUN_RADIUS_KM / EARTH_RADIUS_KM');
-  assert.equal(f32(num('R_MOON_ER')), f32(1737.4 / 6371), 'R_MOON_ER drifted from MOON_RADIUS_KM / EARTH_RADIUS_KM');
+  assert.equal(f32(num('R_SUN_ER')), f32(SUN_RADIUS_KM / EARTH_RADIUS_KM), 'R_SUN_ER drifted from SUN_RADIUS_KM / EARTH_RADIUS_KM');
+  assert.equal(f32(num('R_MOON_ER')), f32(MOON_RADIUS_KM / EARTH_RADIUS_KM), 'R_MOON_ER drifted from MOON_RADIUS_KM / EARTH_RADIUS_KM');
 });
 
 test('earth.moonPosBody agrees with the sub-lunar point already in the state', () => {

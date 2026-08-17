@@ -260,9 +260,12 @@ const STYLE = /* css */ `
     display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
   }
   /* On a phone the capsule can span nearly the whole viewport; the chips
-     drop below its line rather than covering the time and countdown. */
+     drop below its line rather than covering the time and countdown — and
+     below the whole drawer when it is open (the chips are a later sibling,
+     so the open state is reachable in pure CSS). */
   @media (max-width: 560px) {
     #ui-chips { top: calc(48px + env(safe-area-inset-top, 0px)); }
+    #ui-status.open ~ #ui-chips { top: calc(178px + env(safe-area-inset-top, 0px)); }
   }
   .chip {
     display: none; align-items: center; gap: 6px;

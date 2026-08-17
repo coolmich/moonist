@@ -17,9 +17,11 @@ import {
 } from './vec.js';
 
 const AU_KM = Astronomy.KM_PER_AU;
-const MOON_RADIUS_KM = 1737.4;
-const EARTH_RADIUS_KM = 6371.0;
-const SUN_RADIUS_KM = 695700;
+// Exported so the eclipse tests can pin the shader's hard-coded radii to
+// THESE numbers — editing one here must fail a test until the GLSL follows.
+export const MOON_RADIUS_KM = 1737.4;
+export const EARTH_RADIUS_KM = 6371.0;
+export const SUN_RADIUS_KM = 695700;
 export const SYNODIC_DAYS = 29.530589;
 
 // Equatorial radii, IAU 2015 working group values — the same figure Horizons
