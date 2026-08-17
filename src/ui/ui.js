@@ -29,51 +29,142 @@ const STYLE = /* css */ `
   }
   .btn:hover { color: #eef2f7; background: rgba(255, 255, 255, 0.08); }
   .btn[aria-pressed="true"] { color: #a8ccf5; background: rgba(88, 140, 205, 0.22); }
-  .btn:focus-visible, .card:focus-visible, .dt:focus-visible, input.mag:focus-visible {
+  .btn[aria-pressed="true"]:hover { background: rgba(88, 140, 205, 0.34); }
+  /* Disclosure-open is a different kind of state than selected — lighter and
+     uncoloured, so an open "Sky" cannot scan as a fourth toggled layer. */
+  .btn[aria-expanded="true"] { color: #eef2f7; background: rgba(255, 255, 255, 0.12); }
+  .btn[aria-expanded="true"]:hover { background: rgba(255, 255, 255, 0.17); }
+  .btn:focus-visible, .card:focus-visible, .dt:focus-visible, input.mag:focus-visible,
+  .sheet .close:focus-visible, #ui-earthptr:focus-visible, #ui-hint .dismiss:focus-visible,
+  .status-line:focus-visible {
     outline: 2px solid rgba(150, 190, 240, 0.85); outline-offset: 1px;
+  }
+  /* A 26px-tall control is fine under a cursor and hostile under a thumb —
+     and the dismissal controls (modal close, "Got it") are the ones a phone
+     user hits first. */
+  @media (pointer: coarse) {
+    .btn { padding: 11px 12px; }
+    .sheet .close { width: 34px; height: 34px; }
+    #ui-hint .dismiss { padding: 8px 10px; }
+    .chip { padding: 10px 12px; }
+    input.mag { height: 34px; }
   }
   .panel { box-sizing: border-box; }
 
-  /* ---- readout, top left ---- */
-  #ui-readout {
-    top: 14px; left: 14px;
-    padding: 11px 14px;
-    font: 400 12px/1.65 -apple-system, "SF Pro Text", Arial, sans-serif;
-    pointer-events: none;
-    width: 250px;
+  /* ---- status capsule + details drawer, top left ---- */
+  /* One line by default — the sky is the product, the eight readout rows are
+     details on demand. The capsule row itself never changes size; the drawer
+     grows below it as an overlay, so nothing else on screen moves. */
+  #ui-status {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: calc(10px + env(safe-area-inset-left, 0px));
+    /* Wide enough that no site name truncates on a laptop — ellipsising the
+       primary readout while the bar prints the same string in full inverts
+       the hierarchy. Narrow widths switch to short names instead. */
+    max-width: min(560px, calc(100vw - 20px));
   }
-  #ui-readout .site { font-size: 13px; font-weight: 650; color: #edf1f6; }
-  #ui-readout .when { color: #8b95a3; font-variant-numeric: tabular-nums; margin-bottom: 7px; }
-  #ui-readout .row { display: flex; justify-content: space-between; gap: 12px; }
-  #ui-readout .k { color: #8b95a3; white-space: nowrap; }
-  #ui-readout .v { color: #dde4ec; font-variant-numeric: tabular-nums; text-align: right; }
-  #ui-readout .sep { height: 1px; background: rgba(255,255,255,0.09); margin: 7px 0; }
+  #ui-status .status-line {
+    display: flex; align-items: baseline; gap: 7px; width: 100%;
+    background: transparent; border: 0; cursor: pointer;
+    padding: 8px 12px; text-align: left; border-radius: 12px;
+    font: 400 12px/1.5 -apple-system, "SF Pro Text", Arial, sans-serif;
+    color: #c9cfd8; overflow: hidden;
+    transition: background 120ms ease;
+  }
+  #ui-status .status-line:hover { background: rgba(255, 255, 255, 0.05); }
+  #ui-status .site {
+    font-weight: 650; color: #edf1f6;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex: 0 1 auto; min-width: 40px;
+  }
+  #ui-status .when {
+    color: #8b95a3; font-variant-numeric: tabular-nums; white-space: nowrap;
+    min-width: 0; overflow: hidden;
+  }
+  /* A displaced clock confesses even in full chrome — the time-honesty twin
+     of the EARTH chip: same test, warmer ink. */
+  #ui-status .when.warped { color: #d3ac74; }
+  #ui-status .next {
+    color: #a8bdd6; white-space: nowrap; font-variant-numeric: tabular-nums;
+    min-width: 0; overflow: hidden;
+  }
+  #ui-status .status-line kbd {
+    font: inherit; font-size: 10px; opacity: 0.45; align-self: center;
+    border: 1px solid currentColor; border-radius: 3px; padding: 0 3px;
+  }
+  #ui-status .details {
+    display: none; padding: 0 12px 9px;
+    font: 400 12px/1.65 -apple-system, "SF Pro Text", Arial, sans-serif;
+    min-width: 262px; box-sizing: border-box;
+  }
+  #ui-status.open .details { display: block; }
+  #ui-status .row { display: flex; justify-content: space-between; gap: 12px; }
+  #ui-status .k { color: #8b95a3; white-space: nowrap; }
+  #ui-status .v { color: #dde4ec; font-variant-numeric: tabular-nums; text-align: right; }
+  #ui-status .sep { height: 1px; background: rgba(255,255,255,0.09); margin: 6px 0 7px; }
 
-  /* ---- controls, bottom ---- */
+  /* ---- the bar, bottom: the one control surface ---- */
   #ui-dock {
-    bottom: 16px; left: 50%; transform: translateX(-50%);
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 3px; padding: 5px;
     /* An absolutely-positioned flex box shrinks to the space to the right of
        its left edge, i.e. half the viewport, and would wrap for no reason;
        max-content sizes it to its actual contents instead. */
-    width: max-content; max-width: calc(100vw - 24px);
+    width: max-content; max-width: calc(100vw - 16px);
     flex-wrap: wrap; justify-content: center; row-gap: 4px;
   }
   #ui-dock .divider { width: 1px; align-self: stretch; background: rgba(255,255,255,0.10); margin: 3px 2px; }
-  #ui-dock .site-btn { font-weight: 600; color: #dde4ec; }
+  #ui-dock .site-btn {
+    font-weight: 600; color: #dde4ec;
+    max-width: 190px; overflow: hidden; text-overflow: ellipsis;
+  }
   #ui-dock .site-btn::before {
     content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%;
     background: #7fb2ea; margin-right: 7px; vertical-align: middle;
   }
-  .when-group { display: flex; align-items: center; gap: 5px; padding: 0 2px; }
-  .when-group .zone, .earth-group .zone { color: #7d8590; font-size: 10.5px; letter-spacing: 0.06em; }
-  /* The magnifier lives on its own full-width row of the layers panel: a
-     sky-display option like the toggles above it, and the dock stays one row
-     at every width (a 179px group there wrapped it at laptop sizes). */
-  .earth-group {
-    display: flex; align-items: center; justify-content: flex-end;
-    gap: 7px; padding: 4px 6px 1px;
+  /* The clock is the one bar control that reads as a readout, so it borrows
+     the .dt field skin — same primitive, and now it looks pressable. */
+  #ui-dock .clock-btn {
+    font-variant-numeric: tabular-nums;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    padding: 6px 9px; /* the border must not make it taller than its row */
   }
+  #ui-dock .clock-btn .zone { margin-left: 5px; display: inline-block; min-width: 3ch; text-align: left; }
+  /* Wide and narrow labels share each element and the viewport picks one, so
+     every control is present at every width — the five speeds especially:
+     folding the primary verb behind a menu was the old layout's worst sin.
+     The status capsule's site name uses the same pair. */
+  .lab-n { display: none; }
+  @media (max-width: 719px) {
+    .lab-w { display: none; }
+    .lab-n { display: inline; }
+    #ui-dock .site-btn { max-width: 104px; }
+  }
+  .zone { color: #7d8590; font-size: 10.5px; letter-spacing: 0.06em; }
+
+  /* ---- popovers over the bar (clock, sky) ---- */
+  .pop {
+    display: none; flex-direction: column; gap: 2px; padding: 6px;
+    min-width: 216px; max-width: calc(100vw - 16px);
+  }
+  .pop.open { display: flex; }
+  .pop .row { display: flex; align-items: center; gap: 7px; padding: 2px; flex-wrap: wrap; }
+  .pop > .btn { text-align: left; }
+  .btn kbd {
+    font: inherit; opacity: 0.5; margin-left: 6px;
+    border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; font-size: 10px;
+  }
+  /* The magnifier is a sky-display option, so it rides the sky popover as a
+     full-width row under the layer toggles — ruled off from them because it
+     is a dial, not a fourth toggle, and aligned to the same left edge. */
+  .earth-group {
+    display: flex; align-items: center;
+    gap: 7px; padding: 7px 10px 5px; margin-top: 4px;
+    border-top: 1px solid rgba(255,255,255,0.09);
+  }
+  .earth-group input.mag { margin-left: auto; }
   .earth-group .x {
     color: #b6bfcb; font: 500 12px/1 -apple-system, "SF Pro Text", Arial, sans-serif;
     font-variant-numeric: tabular-nums; width: 32px; text-align: left;
@@ -97,32 +188,6 @@ const STYLE = /* css */ `
     font: 500 12px/1 -apple-system, "SF Pro Text", Arial, sans-serif;
     padding: 6px 8px; color-scheme: dark;
   }
-  @media (max-width: 900px) {
-    #ui-dock .speed-wide { display: none; }
-    #ui-readout { width: 210px; font-size: 11.5px; }
-  }
-  @media (max-width: 620px) {
-    .when-group { display: none; }
-  }
-
-  /* ---- layers, top right ---- */
-  /* A column of rows, not a wrapping row: an absolutely-positioned flex
-     container sizes to max-content, which ignores forced wraps and would
-     leave the panel as wide as both rows laid end to end. */
-  #ui-layers { top: 14px; right: 14px; display: flex; flex-direction: column; gap: 2px; padding: 5px; }
-  #ui-layers .layer-row { display: flex; gap: 2px; }
-  #ui-layers .btn kbd {
-    font: inherit; opacity: 0.5; margin-left: 6px;
-    border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; font-size: 10px;
-  }
-  /* Very narrow: stack the layer toggles under the readout so they never
-     collide. Must come after the base #ui-layers rule — same specificity, so
-     source order decides whether top:auto survives. */
-  @media (max-width: 560px) {
-    #ui-layers { top: auto; bottom: 70px; right: 8px; }
-    #ui-readout { width: 196px; }
-  }
-
   /* ---- modal sheets (picker, credits) ---- */
   .backdrop {
     position: absolute; inset: 0;
@@ -174,6 +239,52 @@ const STYLE = /* css */ `
   .credits-list b { color: #dde4ec; font-weight: 600; }
   .credits-list span { color: #7d8590; }
 
+  /* ---- immersive: chrome recedes, honesty stays ---- */
+  .ui { transition: opacity 200ms ease; }
+  #hud.immersive .ui {
+    opacity: 0; pointer-events: none; visibility: hidden;
+    /* Visibility flips only after the fade, and instantly on the way back. */
+    transition: opacity 200ms ease, visibility 0s 200ms;
+  }
+  #hud.immersive #ui-chips, #hud.immersive #ui-msg {
+    opacity: 1; pointer-events: auto; visibility: visible; transition: none;
+  }
+  /* The OSD keeps its .show gate — an unconditional override pinned every
+     confirmation on screen for the whole hidden session — and stays
+     click-through: a tap on the caption itself must still reveal. */
+  #hud.immersive #ui-osd.show {
+    opacity: 1; pointer-events: none; visibility: visible; transition: none;
+  }
+
+  /* ---- honesty chips, top right ---- */
+  /* The two admissions that outrank immersion: a magnified Earth always says
+     ×N, and warped time confesses whenever the chrome that would show it is
+     hidden. Everything else may fade; the truth may not. */
+  #ui-chips {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+  }
+  .chip {
+    display: none; align-items: center; gap: 6px;
+    padding: 6px 10px; cursor: pointer; border-radius: 9px;
+    font: 600 11px/1 -apple-system, "SF Pro Text", Arial, sans-serif;
+    letter-spacing: 0.05em; color: #cfe0f2; font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .chip.on { display: flex; }
+  .chip:hover { color: #ffffff; }
+
+  /* ---- transient on-screen confirmation (hotkeys while hidden) ---- */
+  #ui-osd {
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    padding: 8px 14px; font-size: 12px; color: #dbe4ee;
+    width: max-content; max-width: calc(100vw - 24px);
+    opacity: 0; pointer-events: none; transition: opacity 250ms ease;
+  }
+  #ui-osd.show { opacity: 1; }
+
   /* ---- first-run hint ---- */
   #ui-hint {
     bottom: 74px; left: 50%; transform: translateX(-50%);
@@ -183,6 +294,11 @@ const STYLE = /* css */ `
     transition: opacity 400ms ease;
   }
   #ui-hint { line-height: 1.6; text-align: left; }
+  /* The hint is a note, not a surface: clicks pass through everywhere except
+     its own dismiss, so it can never eat a popover's controls beneath it. */
+  #ui-hint { pointer-events: none; }
+  #ui-hint .dismiss { pointer-events: auto; }
+  .pop { z-index: 1; } /* and the popovers layer above it regardless */
   #ui-hint b { color: #e6ecf3; font-weight: 600; }
   #ui-hint .dismiss { color: #7d8590; cursor: pointer; padding: 2px 4px; }
   #ui-hint .dismiss:hover { color: #e6ecf3; }
@@ -212,11 +328,11 @@ const STYLE = /* css */ `
 `;
 
 const SPEEDS = [
-  [1, 'Real', false],
-  [60, '1 min/s', true],
-  [3600, '1 hr/s', false],
-  [86400, '1 day/s', false],
-  [604800, '1 wk/s', true],
+  [1, 'Real', 'Real'],
+  [60, '1 min/s', '1m'],
+  [3600, '1 hr/s', '1h'],
+  [86400, '1 day/s', '1d'],
+  [604800, '1 wk/s', '1w'],
 ];
 
 const CREDITS = [
@@ -276,48 +392,113 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     return n;
   };
 
-  // ---- readout -------------------------------------------------------------
-  const readout = el('div', 'ui panel', hud);
-  readout.id = 'ui-readout';
-  readout.innerHTML = `
-    <div class="site"></div>
-    <div class="when"></div>
+  // ---- status capsule + details drawer -------------------------------------
+  // One line: site · sim time · speed · next sun event. The countdown rides
+  // the capsule because it is the readout that teaches the primary verb —
+  // seeing "Sunrise in 8.3 d" is what makes a visitor reach for 1 day/s.
+  const status = el('div', 'ui panel', hud);
+  status.id = 'ui-status';
+  const statusLine = el('button', 'status-line', status);
+  statusLine.type = 'button';
+  statusLine.innerHTML = '<span class="site"></span><span class="when"></span>'
+    + '<span class="next"></span><kbd aria-hidden="true">D</kbd>';
+  const details = el('div', 'details', status);
+  details.innerHTML = `
     <div class="row"><span class="k">Sun</span><span class="v" data-k="sun"></span></div>
     <div class="row"><span class="k">Earth</span><span class="v" data-k="earth"></span></div>
     <div class="sep"></div>
     <div class="row"><span class="k">Lunar time</span><span class="v" data-k="local"></span></div>
-    <div class="row"><span class="k" data-k="nextk">Sunrise</span><span class="v" data-k="next"></span></div>
     <div class="row"><span class="k">Looking</span><span class="v" data-k="look"></span></div>
     <div class="row"><span class="k">Cloud map</span><span class="v" data-k="clouds"></span></div>`;
   const R = Object.fromEntries(
-    ['sun', 'earth', 'local', 'nextk', 'next', 'look', 'clouds']
-      .map((k) => [k, readout.querySelector(`[data-k=${k}]`)]),
+    ['sun', 'earth', 'local', 'look', 'clouds']
+      .map((k) => [k, details.querySelector(`[data-k=${k}]`)]),
   );
-  R.site = readout.querySelector('.site');
-  R.when = readout.querySelector('.when');
+  R.site = statusLine.querySelector('.site');
+  R.when = statusLine.querySelector('.when');
+  R.next = statusLine.querySelector('.next');
+  // Expanded is a preference, not a session state: the astronomer opens the
+  // drawer once and keeps today's always-on readout for good.
+  let detailsOpen = (() => {
+    try { return localStorage.getItem('moonist.details') === '1'; } catch { return false; }
+  })();
+  function setDetails(open) {
+    detailsOpen = open;
+    status.classList.toggle('open', open);
+    statusLine.title = open ? 'Hide the full readout' : 'Show the full readout';
+    statusLine.setAttribute('aria-expanded', String(open));
+    try { localStorage.setItem('moonist.details', open ? '1' : '0'); } catch { /* private mode */ }
+  }
+  setDetails(detailsOpen);
+  statusLine.addEventListener('click', () => setDetails(!detailsOpen));
 
-  // ---- layer toggles -------------------------------------------------------
-  const layers = el('div', 'ui panel', hud);
-  layers.id = 'ui-layers';
-  const layerRow = el('span', 'layer-row', layers);
+  // ---- popover plumbing (clock, sky) ---------------------------------------
+  let openPop = null;
+  let dismissHint = () => {}; // bound to the real dismiss while the hint lives
+  function makePop(id, label) {
+    const p = el('div', 'ui panel pop', hud);
+    p.id = id;
+    p.setAttribute('role', 'group');
+    p.setAttribute('aria-label', label);
+    return p;
+  }
+  function hidePop(restoreFocus = false) {
+    if (!openPop) return;
+    openPop.pop.classList.remove('open');
+    openPop.btn.setAttribute('aria-expanded', 'false');
+    // Only a deliberate close (Esc, the trigger again) sends focus back; an
+    // outside click keeps focus where the user just put it.
+    if (restoreFocus) openPop.btn.focus();
+    openPop = null;
+  }
+  function togglePop(pop, btn) {
+    if (openPop && openPop.pop === pop) {
+      hidePop();
+      return;
+    }
+    hidePop();
+    dismissHint(); // the hint sits over the popover column; a popover outranks it
+    pop.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+    openPop = { pop, btn };
+    // Anchor above the bar, centred over its button, clamped on-screen. The
+    // bar's own rect sets the height so a wrapped two-row bar still clears.
+    const br = btn.getBoundingClientRect();
+    const dr = dock.getBoundingClientRect();
+    pop.style.bottom = `${window.innerHeight - dr.top + 6}px`;
+    const w = pop.getBoundingClientRect().width;
+    pop.style.left = `${Math.max(8, Math.min(br.left + br.width / 2 - w / 2, window.innerWidth - w - 8))}px`;
+    pop.querySelector('button, input')?.focus();
+  }
+  // A click on anything that is not the open popover or its button closes it
+  // — including the sky itself, which is on the canvas outside the hud.
+  window.addEventListener('pointerdown', (e) => {
+    if (!openPop) return;
+    const path = e.composedPath();
+    if (!path.includes(openPop.pop) && !path.includes(openPop.btn)) hidePop();
+  });
+  window.addEventListener('resize', hidePop); // anchored position goes stale
+
+  // ---- sky popover: layer toggles + Earth magnifier ------------------------
+  const skyPop = makePop('ui-sky-pop', 'Sky display options');
   const layerBtns = {};
   for (const [key, label, kbd] of [
     ['milkyWay', 'Milky Way', 'M'],
     ['constellations', 'Constellations', 'C'],
     ['starNames', 'Star names', 'N'],
   ]) {
-    const b = el('button', 'btn', layerRow, `${label}<kbd>${kbd}</kbd>`);
+    const b = el('button', 'btn', skyPop, `${label}<kbd>${kbd}</kbd>`);
     b.type = 'button';
     b.setAttribute('aria-pressed', String(!!toggles[key]));
     b.addEventListener('click', () => b.setAttribute('aria-pressed', String(onToggle(key))));
     layerBtns[key] = b;
   }
-  // Earth magnifier: a display choice, so its ×N sits right here in the
-  // chrome, never hidden — a giant Earth must always say it is artificial.
+  // Earth magnifier: a display choice, so its ×N is printed beside the dial —
+  // a giant Earth must always say it is artificial.
   // Log-mapped so the low end, where a nudge is most visible, gets the most
   // travel; the left stop is exactly ×1, the real size. Step 0.025 keeps a
   // drag pixel-smooth while every arrow-key press visibly ticks the label.
-  const magGroup = el('span', 'earth-group', layers);
+  const magGroup = el('span', 'earth-group', skyPop);
   el('span', 'zone', magGroup, 'EARTH');
   const mag = el('input', 'mag', magGroup);
   mag.type = 'range';
@@ -341,24 +522,110 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   magVal.textContent = fmtMag(view.earthScale);
   sayMag(view.earthScale);
 
-  // ---- dock ----------------------------------------------------------------
+  // ---- the bar -------------------------------------------------------------
   const dock = el('div', 'ui panel', hud);
   dock.id = 'ui-dock';
   const siteBtn = el('button', 'btn site-btn', dock);
   siteBtn.type = 'button';
   siteBtn.setAttribute('aria-haspopup', 'dialog');
   el('span', 'divider', dock);
-  const speedBtns = SPEEDS.map(([s, label, wide]) => {
-    const b = el('button', `btn${wide ? ' speed-wide' : ''}`, dock, label);
+  const speedBtns = SPEEDS.map(([s, label, short]) => {
+    const b = el('button', 'btn', dock,
+      `<span class="lab-w">${label}</span><span class="lab-n">${short}</span>`);
     b.type = 'button';
     b.setAttribute('aria-pressed', 'false');
+    b.setAttribute('aria-label', label);
     b.addEventListener('click', () => { clock.setSpeed(s); syncSpeed(); });
     return { s, b };
   });
+  // The clock rides inside the speed group — one fence around "when it is",
+  // not a divider splitting two halves of the same idea.
+  const clockBtn = el('button', 'btn clock-btn', dock);
+  clockBtn.type = 'button';
+  clockBtn.setAttribute('aria-haspopup', 'true');
+  clockBtn.setAttribute('aria-expanded', 'false');
+  clockBtn.title = 'Jump to a date and time, in your local timezone';
+  const clockFull = el('span', 'lab-w', clockBtn);
+  const clockShort = el('span', 'lab-n', clockBtn);
+  const clockZone = el('span', 'zone', clockBtn);
   el('span', 'divider', dock);
-  const whenGroup = el('span', 'when-group', dock);
-  const zoneEl = el('span', 'zone', whenGroup, zoneLabel(new Date()));
-  const dt = el('input', 'dt', whenGroup);
+  const skyBtn = el('button', 'btn', dock, 'Sky');
+  skyBtn.type = 'button';
+  skyBtn.setAttribute('aria-haspopup', 'true');
+  skyBtn.setAttribute('aria-expanded', 'false');
+  skyBtn.title = 'Sky display: layers and the Earth magnifier';
+  // Hide fences with Sky — both decide what you see, and an about-box does
+  // not deserve equal weight with a view mode.
+  const hideBtn = el('button', 'btn', dock, 'Hide<kbd>H</kbd>');
+  hideBtn.type = 'button';
+  hideBtn.title = 'Hide the interface for a pure sky — tap the sky, Esc or H brings it back';
+  hideBtn.addEventListener('click', () => setChromeHidden(true));
+  el('span', 'divider', dock);
+  const creditsBtn = el('button', 'btn', dock, 'Credits');
+  creditsBtn.type = 'button';
+  creditsBtn.setAttribute('aria-haspopup', 'dialog');
+
+  // ---- immersive mode ------------------------------------------------------
+  // An explicit, labelled act — chrome never vanishes on its own. Tap, Esc or
+  // H reveal; Esc never hides. Hotkeys keep working while hidden and confirm
+  // through the transient OSD instead of dragging the panels back.
+  let chromeHidden = false;
+  let hideLessons = (() => {
+    try { return parseInt(localStorage.getItem('moonist.hideHint') || '0', 10) || 0; } catch { return 9; }
+  })();
+  function setChromeHidden(on) {
+    if (chromeHidden === on) return;
+    chromeHidden = on;
+    if (on) {
+      hidePop();
+      // Every entry names the way back — in the default state immersive mode
+      // is zero pixels of chrome, and a caption is the only exit a
+      // pointer-only user is ever shown. The first two are longer lessons.
+      if (hideLessons < 2) {
+        hideLessons += 1;
+        try { localStorage.setItem('moonist.hideHint', String(hideLessons)); } catch { /* private mode */ }
+        osd('Interface hidden — tap the sky or press H to bring it back', 3200);
+      } else {
+        osd('Tap the sky to bring the interface back', 1400);
+      }
+    }
+    hud.classList.toggle('immersive', on);
+  }
+
+  // ---- honesty chips -------------------------------------------------------
+  const chips = el('div', 'ui', hud);
+  chips.id = 'ui-chips';
+  const earthChip = el('button', 'panel chip', chips);
+  earthChip.type = 'button';
+  earthChip.title = 'The Earth is drawn magnified — its face, phase and light stay real. Click to adjust.';
+  earthChip.addEventListener('click', () => {
+    setChromeHidden(false);
+    if (openPop?.pop !== skyPop) togglePop(skyPop, skyBtn);
+  });
+  const timeChip = el('button', 'panel chip', chips);
+  timeChip.type = 'button';
+  timeChip.title = 'Time is running away from your clock. Click for the time controls.';
+  timeChip.addEventListener('click', () => {
+    setChromeHidden(false);
+    if (openPop?.pop !== clockPop) togglePop(clockPop, clockBtn);
+  });
+
+  // ---- transient OSD -------------------------------------------------------
+  const osdEl = el('div', 'ui panel', hud);
+  osdEl.id = 'ui-osd';
+  osdEl.setAttribute('role', 'status');
+  let osdTimer = 0;
+  function osd(text, ms = 1200) {
+    osdEl.textContent = text;
+    osdEl.classList.add('show');
+    clearTimeout(osdTimer);
+    osdTimer = setTimeout(() => osdEl.classList.remove('show'), ms);
+  }
+
+  // ---- clock popover: the date the bar's clock opens onto ------------------
+  const clockPop = makePop('ui-clock-pop', 'Simulated date and time');
+  const whenRow = el('div', 'row', clockPop);
+  const dt = el('input', 'dt', whenRow);
   dt.type = 'datetime-local';
   dt.step = 60;
   dt.min = localMinutes(new Date(MIN_TIME));
@@ -370,13 +637,15 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     // the same clock the field displays.
     if (dt.value) clock.setTime(new Date(dt.value));
   });
-  const nowBtn = el('button', 'btn', dock, 'Now');
+  const zoneEl = el('span', 'zone', whenRow, zoneLabel(new Date()));
+  const nowBtn = el('button', 'btn', whenRow, 'Now<kbd>0</kbd>');
   nowBtn.type = 'button';
   nowBtn.addEventListener('click', () => { clock.resetToRealTime(); syncSpeed(); });
-  el('span', 'divider', dock);
-  const creditsBtn = el('button', 'btn', dock, 'Credits');
-  creditsBtn.type = 'button';
-  creditsBtn.setAttribute('aria-haspopup', 'dialog');
+  clockBtn.addEventListener('click', () => togglePop(clockPop, clockBtn));
+  skyBtn.addEventListener('click', () => togglePop(skyPop, skyBtn));
+  // Tab must flow bar → popover content: the sky popover was built before the
+  // bar (its buttons feed layerBtns), so move it after the bar in the DOM.
+  hud.appendChild(skyPop);
 
   function syncSpeed() {
     for (const { s, b } of speedBtns) b.setAttribute('aria-pressed', String(clock.speed === s));
@@ -402,18 +671,23 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     return { back, sheet };
   }
   function showModal(m, opener) {
+    hidePop();
+    dismissHint();
     if (openModal) openModal.back.classList.remove('open');
     m.back.classList.add('open');
+    // A reopened sheet must not keep last time's scroll — a stale offset
+    // slices the title and puts the close button half off the sheet.
+    m.sheet.scrollTop = 0;
     m.opener = opener;
     openModal = m;
-    // Land focus on the current selection (scrolled into view), not on Close.
+    // Land focus on the current selection, not on Close — but without
+    // scrolling it into view: on a short viewport that pushed the title and
+    // the close button clean off the top of the sheet. The sheet opens at
+    // its head; keyboard travel brings the selection on screen naturally.
     const first = m.sheet.querySelector('.card[aria-current="true"]')
       ?? m.sheet.querySelector('.card')
       ?? m.sheet.querySelector('.close');
-    if (first) {
-      first.focus();
-      first.scrollIntoView?.({ block: 'nearest' });
-    }
+    if (first) first.focus({ preventScroll: true });
   }
   function hideModal() {
     if (!openModal) return;
@@ -459,8 +733,13 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   });
   function syncCards() {
     for (const { s, c } of cards) c.setAttribute('aria-current', String(s.id === view.site.id));
-    siteBtn.textContent = view.site.name;
-    R.site.textContent = view.site.name;
+    const name = view.site.name;
+    const short = name.split('—')[0].trim();
+    // Narrow widths get the site's short name, not a mid-word ellipsis —
+    // in the bar and in the capsule alike.
+    siteBtn.innerHTML = `<span class="lab-w">${name}</span><span class="lab-n">${short}</span>`;
+    R.site.innerHTML = `<span class="lab-w">${name}</span><span class="lab-n">${short}</span>`;
+    R.site.dataset.name = name;
   }
   siteBtn.addEventListener('click', () => { syncCards(); showModal(picker, siteBtn); });
 
@@ -471,10 +750,31 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   for (const [name, what, lic] of CREDITS) {
     el('li', null, list, `<b>${name}</b> — ${what}<br><span>${lic}</span>`);
   }
+  // The one place the whole keyboard is written down — the licence-mandated
+  // sheet earns double duty.
+  el('h2', null, credits.sheet, 'Keyboard');
+  const keysUl = el('ul', 'credits-list', credits.sheet);
+  for (const [k, what] of [
+    ['Drag or arrow keys', 'look around'],
+    ['Scroll, + and −', 'zoom'],
+    ['1 – 5', 'time speed, Real to 1 wk/s'],
+    ['0', 'back to now'],
+    ['E', 'find the Earth'],
+    ['M, C, N', 'Milky Way, constellations, star names'],
+    ['D', 'the full readout'],
+    ['H', 'hide the interface'],
+    ['Esc', 'close, then reveal'],
+  ]) {
+    el('li', null, keysUl, `<b>${k}</b> — ${what}`);
+  }
   creditsBtn.addEventListener('click', () => showModal(credits, creditsBtn));
 
+  // Esc walks back one layer at a time — and never hides anything.
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Escape') hideModal();
+    if (e.code !== 'Escape') return;
+    if (openModal) hideModal();
+    else if (openPop) hidePop(true);
+    else setChromeHidden(false);
   });
 
   // ---- Earth pointer -------------------------------------------------------
@@ -505,16 +805,22 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   if (!seen) {
     hint = el('div', 'ui panel', hud);
     hint.id = 'ui-hint';
-    hint.innerHTML = '<span><b>Drag</b> to look around · <b>scroll</b> to zoom · <b>E</b> finds the Earth.<br>'
+    hint.innerHTML = '<span><b>Drag</b> to look around · <b>scroll</b> to zoom · <b>E</b> finds the Earth · <b>H</b> hides everything.<br>'
       + 'The Earth never moves here, and the Sun takes two weeks to rise — <b>speed up time</b> below.</span>'
       + '<span class="dismiss" role="button" tabindex="0">Got it</span>';
     const dismiss = () => {
       if (!hint) return;
-      hint.style.opacity = '0';
-      setTimeout(() => hint?.remove(), 420);
-      hint = null;
+      const node = hint;
+      hint = null; // nulled first so update() stops repositioning it...
+      node.style.opacity = '0';
+      // ...and removed via its own reference — `hint?.remove()` after the
+      // null was a no-op, leaving an invisible box with live pointer-events
+      // exactly where the popovers open (found by dogfooding).
+      node.style.pointerEvents = 'none';
+      setTimeout(() => node.remove(), 420);
       try { localStorage.setItem('moonist.seen', '1'); } catch { /* private mode */ }
     };
+    dismissHint = dismiss;
     hint.querySelector('.dismiss').addEventListener('click', dismiss);
     // Do not let the very gesture the hint teaches destroy it: the first drag
     // starts a grace period rather than dismissing outright.
@@ -578,8 +884,8 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
         const scale = Math.min(sx, sy);
         let px2 = cx + dx * scale;
         let py2 = cy + dy * scale;
-        // Never sit on the readout: drop below it instead.
-        const rr = readout.getBoundingClientRect();
+        // Never sit on the status capsule: drop below it instead.
+        const rr = status.getBoundingClientRect();
         if (px2 < rr.right + 60 && py2 < rr.bottom + 26) py2 = rr.bottom + 26;
         ptr.style.display = 'flex';
         ptr.style.left = `${px2}px`;
@@ -596,13 +902,42 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       if (now - lastText < 200) return;
       lastText = now;
 
+      // The hint sits above the bar wherever the bar actually is — at narrow
+      // widths the bar wraps taller, and a fixed clearance slid under it.
+      if (hint) hint.style.bottom = `${window.innerHeight - dock.getBoundingClientRect().top + 8}px`;
+
       const d = state.time.date;
       const speedLabel = SPEEDS.find(([s]) => s === clock.speed)?.[1] ?? `${clock.speed}×`;
-      if (R.site.textContent !== view.site.name) syncCards();
+      if (R.site.dataset.name !== view.site.name) syncCards();
       const zone = zoneLabel(d);
-      R.when.textContent = `${localMinutes(d).replace('T', ' ')} ${zone} · ${speedLabel}`;
+      const stamp = localMinutes(d);
+      // The capsule stays one short line: the date appears only when the sim
+      // has left today — the bar's clock button always carries the full stamp.
+      const today = localMinutes(new Date()).slice(0, 10);
+      const when = stamp.slice(0, 10) === today
+        ? stamp.slice(11)
+        : stamp.slice(5).replace('T', ' ');
+      R.when.textContent = `${when} ${zone} · ${speedLabel}`;
+      // Same-day displacement would otherwise pass for the real clock — the
+      // one dishonest state left. Same >60s test as the hidden-mode chip.
+      R.when.classList.toggle('warped', Math.abs(d.getTime() - Date.now()) > 60e3);
       // The zone abbreviation follows the simulated date across a DST boundary.
       if (zoneEl.textContent !== zone) zoneEl.textContent = zone;
+      // The bar's clock button is the same moment, sized for its breakpoint.
+      clockFull.textContent = stamp.replace('T', ' ');
+      clockShort.textContent = stamp.slice(11);
+      if (clockZone.textContent !== zone) clockZone.textContent = zone;
+
+      // Honesty chips. The Earth chip outranks everything: it is on whenever
+      // the disc is drawn bigger than the sky holds it, chrome or no chrome.
+      const magnified = view.earthScale > 1.001;
+      earthChip.classList.toggle('on', magnified);
+      if (magnified) earthChip.textContent = `EARTH ${fmtMag(view.earthScale)}`;
+      const warp = [];
+      if (clock.speed !== 1) warp.push(speedLabel);
+      if (Math.abs(d.getTime() - Date.now()) > 60e3) warp.push(stamp.slice(5).replace('T', ' '));
+      timeChip.classList.toggle('on', chromeHidden && warp.length > 0);
+      if (warp.length) timeChip.textContent = `TIME ${warp.join(' · ')}`;
 
       // Running into the ephemeris limit must not look like a silent freeze.
       if (clock.atLimit && clock.speed !== 1 && !atLimitWarned) {
@@ -623,13 +958,12 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       R.local.textContent = `${fmtClock(lsh)} · day ${(lsh / 24 * 29.5).toFixed(1)} of 29.5`;
       const ev = view.nextSunEvent();
       if (ev) {
-        R.nextk.textContent = ev.kind === 'sunrise' ? 'Sunrise' : 'Sunset';
+        const kind = ev.kind === 'sunrise' ? 'Sunrise' : 'Sunset';
         R.next.textContent = ev.days < 1
-          ? `in ${(ev.days * 24).toFixed(1)} hours`
-          : `in ${ev.days.toFixed(1)} Earth days`;
+          ? `${kind} in ${(ev.days * 24).toFixed(1)} h`
+          : `${kind} in ${ev.days.toFixed(1)} d`;
       } else {
-        R.nextk.textContent = state.sun.alt > 0 ? 'Sunset' : 'Sunrise';
-        R.next.textContent = 'not within a month';
+        R.next.textContent = `no ${state.sun.alt > 0 ? 'sunset' : 'sunrise'} for a month`;
       }
 
       // The magnifier can also be driven through the view API; the chrome
@@ -682,15 +1016,37 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       layerBtns[key]?.setAttribute('aria-pressed', String(on));
     },
 
+    /** Expand or collapse the details drawer (hotkey D). */
+    toggleDetails() {
+      setDetails(!detailsOpen);
+    },
+
     /** True while the picker or credits sheet is open (blocks app hotkeys). */
     get modalOpen() {
       return openModal !== null;
     },
 
+    /** True while the interface is hidden for a pure sky. */
+    get hidden() {
+      return chromeHidden;
+    },
+    setChromeHidden,
+    toggleChrome() {
+      setChromeHidden(!chromeHidden);
+    },
+    /** Flash a transient confirmation (hotkeys pressed while hidden). */
+    osd,
+
     /** Screen areas the sky-label layer must keep clear. */
     panelRects() {
       const rects = [];
-      for (const node of [readout, layers, dock, hint, msg.style.display === 'block' ? msg : null]) {
+      // Hidden chrome frees the whole frame for sky labels; only the honesty
+      // chips and a live toast still claim their ground.
+      const nodes = chromeHidden
+        ? [chips, osdEl.classList.contains('show') ? osdEl : null, msg.style.display === 'block' ? msg : null]
+        : [status, dock, skyPop, clockPop, chips, hint, osdEl.classList.contains('show') ? osdEl : null,
+          msg.style.display === 'block' ? msg : null];
+      for (const node of nodes) {
         if (!node) continue;
         const r = node.getBoundingClientRect();
         if (r.width > 0) rects.push({ x: r.left - 4, y: r.top - 4, w: r.width + 8, h: r.height + 8 });

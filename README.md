@@ -63,12 +63,17 @@ Earth all fit in a single frame.
 
 Drag to look around, wheel to zoom (0.2°–100° field of view — far enough in for Venus to
 show its crescent, Jupiter its belts, and Saturn its rings, tilted as they really are on
-today's date). The bottom dock holds the site
-picker, time-lapse speeds and a date jump. The layers panel (top right) holds the sky
-toggles and the `EARTH ×1–×10` slider, which magnifies the Earth's image alone — its face,
-phase and light stay real, and everything it is drawn over gets covered exactly as a
-magnifier's image would cover it. Keys: `1`–`5` speed, `0` back to now, `M` Milky Way,
-`C` constellations, `N` star names, `E` snap to the Earth.
+today's date). One bar along the bottom holds everything: the site picker, the five
+time-lapse speeds, the clock (opens the date jump), Sky (the layer toggles and the
+`EARTH ×1–×10` slider, which magnifies the Earth's image alone — its face, phase and light
+stay real, and everything it is drawn over gets covered exactly as a magnifier's image
+would), Credits, and Hide. The status line top-left reads site · time · speed · next sun
+event; click it (or `D`) for the full readout. Hide (`H`) fades all of it for a pure sky —
+tap the sky, `Esc` or `H` brings it back, and every key keeps working while it is hidden.
+Two things never hide: a magnified Earth always shows its `EARTH ×N` chip, and warped time
+confesses itself top-right whenever the chrome that would show it is gone. Keys: `1`–`5`
+speed, `0` back to now, `M` Milky Way, `C` constellations, `N` star names, `E` snap to the
+Earth, `D` readout, `H` hide — the full list lives in the Credits sheet.
 
 ## How it is built
 

@@ -285,9 +285,9 @@ four times the Moon's diameter in Earth's sky — and the user wants it artifici
 the landscape, "so that the person on the moon can clearly see much more details of the
 earth", configurable by dragging, without breaking the physics.
 
-- **A magnifying glass held over the Earth alone.** The `EARTH ×1–×10` slider in the layers
-  panel — a sky-display option, so it lives with the sky-display toggles, and the dock keeps
-  its one-row width — is log-mapped so the low end gets the travel; the left stop is exactly
+- **A magnifying glass held over the Earth alone.** The `EARTH ×1–×10` slider in the bar's
+  Sky popover — a sky-display option, so it lives with the sky-display toggles — is
+  log-mapped so the low end gets the travel; the left stop is exactly
   ×1. It scales only the drawn mesh. Everything computed *from* the Earth — earthshine on the ground, eclipse
   dimming, phase, orientation, the ephemeris itself — keeps the true angular radius, and the
   readout keeps reporting the real altitude and illumination. The setting persists per user;
@@ -354,8 +354,9 @@ earth", configurable by dragging, without breaking the physics.
   shader ray-remap could restore it; not worth the risk to a verified shader. And dragging
   the slider while the Earth is off screen changes only the ×N label — the off-screen Earth
   chip, already visible in exactly that scenario, is the guidance to turn toward it.
-- **Honesty rule**: the ×N readout sits beside the slider in always-visible chrome, so a
-  giant Earth on screen is never more than a glance from the label saying it is artificial.
+- **Honesty rule**: whenever the dial is not ×1, an `EARTH ×N` chip sits top-right in
+  chrome that never hides — it survives the Hide mode and every width — so a giant Earth
+  on screen always says it is artificial. (The ×N also reads beside the slider itself.)
 - Verified on screen: disc chords at ×5 measure 5.08× / 5.00× (H/V) of the ×1 chords at 30°
   FOV; the setting survives a reload; the ring encloses the disc on- and off-axis at ×10;
   the blue limb arc measures 3 px wide exactly at the ×10 limb, sunlit side only; the
@@ -489,3 +490,34 @@ earth", configurable by dragging, without breaking the physics.
   it reproduces the 4k to 3.5 levels while its gradient energy is 0.79× the
   4k's, not the 0.5× interpolation gives). Earthshine is unaffected — it comes
   from `illumFraction` in the astro core, never from the render.
+- 2026-08-17 (eclipse shadow): user reported the 2026-08-12 eclipse missing
+  from the Earth. Correct — only the reverse eclipse (Earth over the Sun) was
+  modelled. Added: the Earth shader darkens each surface point by the fraction
+  of the Sun the Moon covers as seen from that point; `sunObscuration` in the
+  engine is the shader's node-tested twin, pinned against astronomy-engine's
+  independent global and local eclipse searches (umbra ground point 2026-08-12
+  and 2024-04-08; Reykjavik/Madrid/London obscuration to ≤0.5%). Dogfooded
+  against the ephemeris-projected shadow axis (7 px agreement on a 299 px
+  disc) and NASA's EPIC photograph of the same eclipse (umbra at r/R 0.90 vs
+  0.89). Penumbra drawn neutral; the amber limb-darkening tint is not
+  modelled. 43 tests green.
+- 2026-08-17 (one-bar chrome): user reported corner-pinned, breakpoint-patched
+  chrome and asked for an immersive mode. Rebuilt around three surfaces, from
+  a three-design exploration judged adversarially (immersion-first, IA-first,
+  phone-first): ONE bar at the bottom (site · five speeds · clock · Sky ·
+  Credits · Hide — the speeds never fold at any width; the primary verb stays
+  one tap), a one-line STATUS CAPSULE top-left (site · time · speed · next sun
+  event; click/D expands the full readout, persisted), and HONESTY CHIPS
+  top-right. Clock and Sky open popovers over the bar; below 720 px labels
+  compact (Real/1m/1h/1d/1w, time-only clock, short site names) and the bar
+  may wrap to two rows — capabilities relocate, never disappear (the old 620px
+  query that deleted the date picker on phones is gone). Hide (H) fades all
+  chrome; a clean tap on the sky, Esc, or H reveals; Esc never hides; hotkeys
+  keep working while hidden with a transient OSD confirmation; the first two
+  hides teach the way back. Honesty outranks immersion: `EARTH ×N` shows
+  whenever magnified (chrome or no chrome), and a time chip confesses warped
+  time while chrome is hidden. Auto-fade (video-player idle hide) was
+  considered and rejected for v1: both review judges wounded it — it strands
+  cold visitors and fades the sunrise countdown exactly while it is being
+  watched. Label avoidance gets empty rects while hidden, so sky labels use
+  the whole frame. 43 tests green.

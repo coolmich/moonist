@@ -46,6 +46,10 @@ product is and `PRD.md` for the requirements and the decision log.
 - **Sky directions must be projected from the camera, not the origin.** The eye stands
   `groundY + 1.7` above the scene origin, so projecting `dir * R` puts a label ~0.1° off —
   nothing at 65° FOV, a visible offset between a disc and the label beside it at 4°.
+- **New chrome joins two lists or it misbehaves**: the node list in `panelRects()` (or sky
+  labels slide under it), and — only if it must survive Hide — the `#hud.immersive`
+  exception selector. Everything else fades. The honesty chips (`EARTH ×N`, warped time) and
+  the error toast are the only survivors by design; honesty outranks immersion (PRD).
 - **Every Earth mesh must carry `uWarp`.** The magnified disc is de-stretched by a
   clip-space squash applied in the Earth's vertex shader (`gl_Position = uWarp * ...`), which
   is what keeps it round off-axis; a new material on that group without the uniform renders

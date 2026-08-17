@@ -102,6 +102,9 @@ canvas.addEventListener('pointerdown', (e) => {
   look.lastX = e.clientX;
   look.lastY = e.clientY;
   look.lastT = performance.now();
+  look.downX = e.clientX;
+  look.downY = e.clientY;
+  look.downT = look.lastT;
   canvas.classList.add('dragging');
   canvas.setPointerCapture(e.pointerId);
 });
@@ -138,7 +141,18 @@ function endDrag() {
     look.vAlt = 0;
   }
 }
-canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointerup', (e) => {
+  endDrag();
+  // A clean tap on the sky — short, still, no drag — brings hidden chrome
+  // back. It only ever reveals, so the gate is deliberately loose: this is
+  // the sole exit for a pointer-only user staring at zero UI, and a tight
+  // window would read as a frozen page.
+  if (ui?.hidden
+      && performance.now() - look.downT < 600
+      && Math.hypot(e.clientX - look.downX, e.clientY - look.downY) < 10) {
+    ui.setChromeHidden(false);
+  }
+});
 canvas.addEventListener('pointercancel', endDrag);
 
 canvas.addEventListener('wheel', (e) => {
@@ -158,6 +172,8 @@ const CARDINALS = [
   ['S', 180], ['SW', 225], ['W', 270], ['NW', 315],
 ];
 const SPEEDS = { Digit1: 1, Digit2: 60, Digit3: 3600, Digit4: 86400, Digit5: 604800 };
+const SPEED_NAMES = { 1: 'Real time', 60: '1 min/s', 3600: '1 hr/s', 86400: '1 day/s', 604800: '1 wk/s' };
+const LAYER_NAMES = { milkyWay: 'Milky Way', constellations: 'Constellations', starNames: 'Star names' };
 const toggles = { milkyWay: true, constellations: true, starNames: true };
 
 function toggleLayer(key) {
@@ -181,11 +197,29 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
-  if (SPEEDS[e.code]) clock.setSpeed(SPEEDS[e.code]);
-  if (e.code === 'Digit0') clock.resetToRealTime();
-  if (e.code === 'KeyM') ui?.syncToggle('milkyWay', toggleLayer('milkyWay'));
-  if (e.code === 'KeyC') ui?.syncToggle('constellations', toggleLayer('constellations'));
-  if (e.code === 'KeyN') ui?.syncToggle('starNames', toggleLayer('starNames'));
+  // Hotkeys keep working while the chrome is hidden; the OSD chip confirms
+  // the invisible action rather than dragging the panels back on screen.
+  const confirm = (text) => { if (ui?.hidden) ui.osd(text); };
+  if (SPEEDS[e.code]) {
+    clock.setSpeed(SPEEDS[e.code]);
+    confirm(SPEED_NAMES[SPEEDS[e.code]]);
+  }
+  if (e.code === 'Digit0') {
+    clock.resetToRealTime();
+    confirm('Back to now');
+  }
+  if (e.code === 'KeyH') ui?.toggleChrome();
+  if (e.code === 'KeyD') {
+    ui?.setChromeHidden(false); // the drawer is chrome; reveal before opening
+    ui?.toggleDetails();
+  }
+  for (const [code, key] of [['KeyM', 'milkyWay'], ['KeyC', 'constellations'], ['KeyN', 'starNames']]) {
+    if (e.code === code) {
+      const on = toggleLayer(key);
+      ui?.syncToggle(key, on);
+      confirm(`${LAYER_NAMES[key]} ${on ? 'on' : 'off'}`);
+    }
+  }
   if (e.code === 'KeyE' && latestState) {
     view.lookAt(latestState.earth.az, latestState.earth.alt, undefined, true);
   }
