@@ -246,8 +246,20 @@ function fmtClock(hours) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function isoLocalMinutes(d) {
-  return d.toISOString().slice(0, 16);
+// The chrome speaks the viewer's own wall clock. Built from the local
+// component getters rather than a shifted `toISOString`: the offset moves with
+// DST and, over the 1700–2200 range the clock allows, with the zone's history.
+function localMinutes(d) {
+  const p = (n, w = 2) => String(n).padStart(w, '0');
+  return `${p(d.getFullYear(), 4)}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+    + `T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Short zone name for the date being simulated, so a summer date reads PDT and
+// a winter one PST. Zones without an abbreviation come back as "GMT+5:30".
+const ZONE_FMT = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' });
+function zoneLabel(d) {
+  return ZONE_FMT.formatToParts(d).find((p) => p.type === 'timeZoneName')?.value ?? '';
 }
 
 export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) {
@@ -273,7 +285,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     <div class="row"><span class="k">Sun</span><span class="v" data-k="sun"></span></div>
     <div class="row"><span class="k">Earth</span><span class="v" data-k="earth"></span></div>
     <div class="sep"></div>
-    <div class="row"><span class="k">Local time</span><span class="v" data-k="local"></span></div>
+    <div class="row"><span class="k">Lunar time</span><span class="v" data-k="local"></span></div>
     <div class="row"><span class="k" data-k="nextk">Sunrise</span><span class="v" data-k="next"></span></div>
     <div class="row"><span class="k">Looking</span><span class="v" data-k="look"></span></div>
     <div class="row"><span class="k">Cloud map</span><span class="v" data-k="clouds"></span></div>`;
@@ -345,16 +357,18 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   });
   el('span', 'divider', dock);
   const whenGroup = el('span', 'when-group', dock);
-  el('span', 'zone', whenGroup, 'UTC');
+  const zoneEl = el('span', 'zone', whenGroup, zoneLabel(new Date()));
   const dt = el('input', 'dt', whenGroup);
   dt.type = 'datetime-local';
   dt.step = 60;
-  dt.min = isoLocalMinutes(new Date(MIN_TIME));
-  dt.max = isoLocalMinutes(new Date(MAX_TIME));
-  dt.title = 'Jump to a date and time, in UTC';
-  dt.setAttribute('aria-label', 'Simulated date and time, UTC');
+  dt.min = localMinutes(new Date(MIN_TIME));
+  dt.max = localMinutes(new Date(MAX_TIME));
+  dt.title = 'Jump to a date and time, in your local timezone';
+  dt.setAttribute('aria-label', 'Simulated date and time, local timezone');
   dt.addEventListener('change', () => {
-    if (dt.value) clock.setTime(new Date(`${dt.value}:00Z`));
+    // A datetime-local value carries no offset, so this parses as local time —
+    // the same clock the field displays.
+    if (dt.value) clock.setTime(new Date(dt.value));
   });
   const nowBtn = el('button', 'btn', dock, 'Now');
   nowBtn.type = 'button';
@@ -585,7 +599,10 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       const d = state.time.date;
       const speedLabel = SPEEDS.find(([s]) => s === clock.speed)?.[1] ?? `${clock.speed}×`;
       if (R.site.textContent !== view.site.name) syncCards();
-      R.when.textContent = `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC · ${speedLabel}`;
+      const zone = zoneLabel(d);
+      R.when.textContent = `${localMinutes(d).replace('T', ' ')} ${zone} · ${speedLabel}`;
+      // The zone abbreviation follows the simulated date across a DST boundary.
+      if (zoneEl.textContent !== zone) zoneEl.textContent = zone;
 
       // Running into the ephemeris limit must not look like a silent freeze.
       if (clock.atLimit && clock.speed !== 1 && !atLimitWarned) {
@@ -599,8 +616,9 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       R.sun.textContent = `${fmtAlt(state.sun.alt)} alt · ${fmtAz(state.sun.az)} az`;
       R.earth.textContent = `${fmtAlt(state.earth.alt)} alt · ${(state.earth.illumFraction * 100).toFixed(0)}% lit`;
 
-      // A lunar hour is 29.53/24 Earth days, so the local clock needs its
-      // scale spelled out to mean anything.
+      // A lunar hour is 29.53/24 Earth days, so this clock needs its scale
+      // spelled out to mean anything — and its label has to say "lunar", now
+      // that the date above it is the viewer's own local time.
       const lsh = state.localSolarHours;
       R.local.textContent = `${fmtClock(lsh)} · day ${(lsh / 24 * 29.5).toFixed(1)} of 29.5`;
       const ev = view.nextSunEvent();
@@ -636,7 +654,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
           const timeTraveling = Math.abs(d.getTime() - Date.now()) > 12 * 3600e3;
           R.clouds.textContent = timeTraveling
             ? 'live — showing today’s weather'
-            : `live · fetched ${fetchedAt.toISOString().slice(11, 16)} UTC`;
+            : `live · fetched ${localMinutes(fetchedAt).slice(11)}`;
         } else if (kind === 'offline') {
           R.clouds.textContent = 'offline copy';
         } else {
@@ -646,7 +664,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
         R.clouds.textContent = String(cloudStatus);
       }
 
-      if (document.activeElement !== dt) dt.value = isoLocalMinutes(d);
+      if (document.activeElement !== dt) dt.value = localMinutes(d);
       syncSpeed();
 
       // Live Earth altitude per site, so the picker never advertises a number

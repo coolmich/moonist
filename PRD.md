@@ -388,3 +388,17 @@ earth", configurable by dragging, without breaking the physics.
   exactly where they did (verified: Saturn's label unmoved at 2.5° FOV between
   before/after screenshots; the Earth's label still clears the limb at ×10).
   38 tests green, zero console errors.
+- 2026-08-17 (local clock): the chrome now speaks the viewer's own timezone
+  instead of UTC — readout line, the datetime-local field (display *and*
+  parse), and the cloud fetch time. The zone abbreviation is read from
+  `Intl.DateTimeFormat` for the *simulated* date, so it tracks DST: the same
+  build prints PST in January and PDT in July, and GMT+5:30 in Kolkata.
+  Display only — the clock stays epoch ms and the ephemeris never sees a zone
+  (verified: Sun 50.9° alt · 81° az and Earth 21.0° alt · 7% lit are identical
+  in Kolkata and Los Angeles for 2026-05-04T09:15Z; only the wall clock
+  differs). The readout's lunar-solar row was renamed **Lunar time**, since
+  "Local time" would now name two different clocks in one panel. Layout: the
+  widest label (GMT+5:30) leaves the dock one row at 880/900/1024/1280 px, the
+  regression pinned above. Typing an hour that DST skips (02:30 on a
+  spring-forward day) resolves forward to 03:30 and the field echoes back what
+  it actually used — accepted, and the honest answer.
