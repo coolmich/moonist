@@ -209,6 +209,19 @@ let site = (() => {
   return SITES.find((s) => s.id === 'grimaldi');
 })();
 
+// Earth display magnification (1 = its real angular size). A pure display
+// choice, clamped and stored here so every consumer — the mesh, the label
+// ring, the label occluder — agrees on one value. ×10 keeps the whole disc
+// above the skyline even at Grimaldi, where the Earth hangs lowest (~21°).
+const EARTH_SCALE_MAX = 10;
+let earthScale = (() => {
+  try {
+    const v = parseFloat(localStorage.getItem('moonist.earthScale'));
+    if (v >= 1 && v <= EARTH_SCALE_MAX) return v;
+  } catch { /* private mode */ }
+  return 1;
+})();
+
 let milkyway = null;
 let starfield = null;
 let planets = null;
@@ -355,19 +368,49 @@ const view = {
     const az = ((THREE.MathUtils.radToDeg(look.az) % 360) + 360) % 360;
     return { az, alt: THREE.MathUtils.radToDeg(look.alt), fov: look.fov };
   },
-  /** Project a scene-frame direction to client pixels for HUD indicators. */
-  projectDir(dir) {
+  /** Project a scene-frame direction to client pixels for HUD indicators.
+   *  angRadiusDeg widens the on-screen test for an extended disc: it counts
+   *  as visible while any part of it is, not just its centre — a magnified
+   *  Earth must not be flagged "off screen" with half its disc in frame. */
+  projectDir(dir, angRadiusDeg = 0) {
     const e = camera.matrixWorld.elements;
     const behind = dir[0] * -e[8] + dir[1] * -e[9] + dir[2] * -e[10] < 0;
     const v = new THREE.Vector3(dir[0], dir[1], dir[2])
       .multiplyScalar(1000).add(camera.position).project(camera);
     const x = (v.x * 0.5 + 0.5) * window.innerWidth;
     const y = (-v.y * 0.5 + 0.5) * window.innerHeight;
-    const pad = 60;
+    let rPx = 0;
+    if (angRadiusDeg) {
+      // The disc's reach back toward the screen centre is f·(tan φ −
+      // tan(φ−θ)), not f·tan θ — the same tan convexity the label ring
+      // accounts for. With the on-axis form a ×10 disc sliding off a wide
+      // frame still had a ~185 px slab on screen when the chip fired.
+      const theta = THREE.MathUtils.degToRad(angRadiusDeg);
+      const cosPhi = THREE.MathUtils.clamp(
+        dir[0] * -e[8] + dir[1] * -e[9] + dir[2] * -e[10], -1, 1,
+      );
+      const phi = Math.min(Math.acos(cosPhi), 1.35);
+      const f = window.innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
+      rPx = f * (Math.tan(phi) - Math.tan(phi - theta));
+    }
+    const pad = 60 - rPx;
     return {
       x, y, behind,
       onScreen: !behind && x > pad && x < window.innerWidth - pad && y > pad && y < window.innerHeight - pad,
     };
+  },
+  /** Earth display magnification, 1 = real. Persisted per user. */
+  get earthScale() {
+    return earthScale;
+  },
+  get earthScaleMax() {
+    return EARTH_SCALE_MAX;
+  },
+  setEarthScale(v) {
+    if (!Number.isFinite(v)) return earthScale;
+    earthScale = THREE.MathUtils.clamp(v, 1, EARTH_SCALE_MAX);
+    try { localStorage.setItem('moonist.earthScale', String(earthScale)); } catch { /* private mode */ }
+    return earthScale;
   },
   get state() {
     return latestState;
@@ -468,7 +511,8 @@ function renderFrame() {
   // behind the Earth's or the Sun's disc.
   const occluders = [];
   if (state.earth.alt > -3) {
-    occluders.push({ dir: state.earth.sceneDir, cosR: Math.cos(THREE.MathUtils.degToRad(state.earth.angRadiusDeg)) });
+    // The occluder matches the disc as drawn, magnification included.
+    occluders.push({ dir: state.earth.sceneDir, cosR: Math.cos(THREE.MathUtils.degToRad(state.earth.angRadiusDeg * earthScale)) });
   }
   if (state.sun.alt > -3) {
     occluders.push({ dir: state.sun.sceneDir, cosR: Math.cos(THREE.MathUtils.degToRad(state.sun.angRadiusDeg)) });
@@ -536,22 +580,34 @@ function renderFrame() {
     }
   }
   if (earth) {
+    earth.setScale(earthScale);
     earth.update(state);
     earth.setBrightness(earthBrightness);
     // Label the hero object whenever it is actually in view. (It is its own
     // occluder, so test the skyline directly rather than via aboveSkyline.)
     const eh = Math.hypot(state.earth.sceneDir[0], state.earth.sceneDir[2]);
     if (Math.atan2(state.earth.sceneDir[1], eh) > horizonAlt(state.earth.sceneDir)) {
+      // Ring radius that still encloses the disc off-axis. The projection of
+      // a sphere seen at angle phi from the view axis stretches outward to
+      // f·(tan(phi+theta) − tan(phi)); with a magnified disc (theta up to
+      // 9.5°) the on-axis f·tan(theta) slices through the limb once the
+      // Earth sits off-centre. Slightly loose tangentially, never inside.
+      const ed = state.earth.sceneDir;
+      const cosPhi = Math.sin(look.az) * Math.cos(look.alt) * ed[0]
+        + Math.sin(look.alt) * ed[1]
+        - Math.cos(look.az) * Math.cos(look.alt) * ed[2];
+      const theta = THREE.MathUtils.degToRad(state.earth.angRadiusDeg * earthScale);
+      // Clamp so tan stays sane when the disc is far off-axis (the label is
+      // culled off screen there anyway).
+      const phi = Math.min(Math.acos(THREE.MathUtils.clamp(cosPhi, -1, 1)), 1.35 - theta);
+      const fPx = heightPx / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
       labelItems.push({
         id: 'earth',
         dir: state.earth.sceneDir,
         text: 'Earth',
         cls: 'planet',
         priority: -20,
-        ring: Math.max(
-          state.earth.angRadiusDeg * (heightPx / look.fov) + 7,
-          9,
-        ),
+        ring: Math.max(fPx * (Math.tan(phi + theta) - Math.tan(phi)) + 7, 9),
       });
     }
   }

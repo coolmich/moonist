@@ -266,6 +266,59 @@ data that stays sharp.
   dark field of points — no fog balls around bright stars (those were the texture's copies
   of the drawn stars, and are gone with the subtraction). 8.2 ms/frame with the full layer.
 
+## The Earth magnifier: one display dial, zero physics (2026-08-17)
+
+**User request**: from the Moon the Earth is genuinely small — under 2° across, only about
+four times the Moon's diameter in Earth's sky — and the user wants it artificially big over
+the landscape, "so that the person on the moon can clearly see much more details of the
+earth", configurable by dragging, without breaking the physics.
+
+- **A magnifying glass held over the Earth alone.** The `EARTH ×1–×10` slider in the layers
+  panel — a sky-display option, so it lives with the sky-display toggles, and the dock keeps
+  its one-row width — is log-mapped so the low end gets the travel; the left stop is exactly
+  ×1. It scales only the drawn mesh. Everything computed *from* the Earth — earthshine on the ground, eclipse
+  dimming, phase, orientation, the ephemeris itself — keeps the true angular radius, and the
+  readout keeps reporting the real altitude and illumination. The setting persists per user;
+  the view API adds `earthScale` / `setEarthScale` / `earthScaleMax` for automated checks.
+- **The enlarged image covers what is behind it**, exactly as a magnifier's does: the opaque
+  mesh depth-occludes stars, planets and the Sun's sprite, and the label occluder and the
+  Earth's ring both use the scaled radius. Near new moon the Sun visibly slides behind a
+  magnified Earth while the ground stays sunlit — accepted and commented in `earth.js`: the
+  lighting is ephemeris-driven, the disc is a picture.
+- **Magnification voids small-angle shortcuts — two review fleets, all findings confirmed
+  numerically, fixed, and re-measured.** The physical ones: the atmosphere shader assumed
+  parallel sight lines (true with the viewer ~60 globe radii out, false at the ×10 mesh's
+  ~6, so the blue halo detached from the limb — it now builds the per-fragment ray from the
+  drawn mesh's viewer distance), and that first fix briefly made the ocean glint's position
+  a function of the dial — `uViewDistBody` is now two uniforms, true geometry for the
+  picture's content, drawn-mesh geometry for the limb-hugging arc. The chrome ones: the
+  off-screen Earth pointer tested only the disc centre, then only the on-axis radius — it
+  now uses the off-axis penetration f·(tan φ − tan(φ−θ)), the same tan convexity the label
+  ring needed for its enclosing radius; the slider originally sat in the dock, whose
+  one-row width it pushed to 999 px — wrapping the dock to two rows across laptop widths,
+  orphaning Credits, and colliding with the first-run hint — so it moved to the layers
+  panel as its own row; keyboard arrows now tick the label visibly (step 0.025, ~6% per
+  press); `aria-valuetext` speaks the ×N a sighted user sees instead of the raw log
+  fraction; and the slider joined the shared focus-ring rule. Rehousing the control also
+  fixed a pre-existing phone-width bug: the ≤560 px media block preceded the base
+  `#ui-layers` rule it overrides (equal specificity, source order decides), stretching the
+  layer toggles into a 716 px-tall wall.
+- **Accepted, documented, not fixed**: the enlarged mesh is geometrically a *closer* Earth,
+  so the visible cap shrinks from 89.0° to 80.5° at ×10 — the outer ~1.4% of the true disc,
+  already foreshortened to invisibility at ×1, slips out of frame as the dial rises. A
+  shader ray-remap could restore it; not worth the risk to a verified shader. And dragging
+  the slider while the Earth is off screen changes only the ×N label — the off-screen Earth
+  chip, already visible in exactly that scenario, is the guidance to turn toward it.
+- **Honesty rule**: the ×N readout sits beside the slider in always-visible chrome, so a
+  giant Earth on screen is never more than a glance from the label saying it is artificial.
+- Verified on screen: disc chords at ×5 measure 5.08× / 5.00× (H/V) of the ×1 chords at 30°
+  FOV; the setting survives a reload; the ring encloses the disc on- and off-axis at ×10;
+  the blue limb arc measures 3 px wide exactly at the ×10 limb, sunlit side only; the
+  pointer fires only once the whole disc is off frame (near limb ~24 px past the edge at
+  65°/×10) and never with a slab visible; the dock stays one row at 880–1024 px and across
+  site changes; one arrow press ticks ×1.0 → ×1.1 with matching `aria-valuetext`; zero
+  console errors.
+
 ## Known limits
 
 - The star catalogue is J2000 with no proper motion or aberration: the fastest-
@@ -319,3 +372,12 @@ data that stays sharp.
   resolution" report — Tycho-2 layer to V 10 (SIMBAD-checked), all drawn stars
   subtracted from the texture in the sky metric, band-limited magnification,
   aperture gain. Texture 5.4 → 2.1 MB; 8.2 ms/frame; 38 tests green.
+- 2026-08-17 (Earth magnifier): user-requested display dial — the EARTH ×1–×10
+  slider (layers panel) inflates only the drawn disc; every physical quantity
+  keeps the true radius. On-screen chords measure 5.08×/5.00× at the ×5
+  setting; persists across reload. Two adversarial review fleets confirmed
+  twelve findings: small-angle shortcuts the magnification voided (atmosphere
+  halo, glint geometry, pointer, ring), a dock-wrap layout regression that
+  moved the control to the layers panel, keyboard/aria/focus gaps, and one
+  pre-existing phone-width CSS cascade bug. Ten fixed and re-measured, two
+  accepted and documented. 38 tests green.

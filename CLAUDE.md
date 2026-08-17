@@ -82,8 +82,10 @@ tests/         node:test suites; fixtures/horizons.json is ground truth
 public/        textures, star catalogs, generated terrain patches
 ```
 
-`window.moonist` exposes `lookAt/look/state/site/setSite/clock` — the UI uses it, and so do
-automated browser checks. Keep it stable.
+`window.moonist` exposes `lookAt/look/state/site/setSite/clock` plus
+`earthScale/setEarthScale/earthScaleMax` (the Earth display magnifier, ×1–×10 — scales only
+the drawn disc, never anything physical) — the UI uses it, and so do automated browser
+checks. Keep it stable.
 
 ## Regenerating data
 

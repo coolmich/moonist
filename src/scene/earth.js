@@ -32,6 +32,7 @@ const FRAG = /* glsl */ `
   uniform sampler2D uClouds;
   uniform vec3 uSunDirBody;
   uniform vec3 uViewDirBody;
+  uniform float uViewDistBody;
   uniform float uBrightness;
 
   const float PI = 3.14159265358979;
@@ -67,9 +68,12 @@ const FRAG = /* glsl */ `
     vec3 cloudLit = vec3(1.0, 0.99, 0.97) * diffuse;
     dayLit = mix(dayLit, cloudLit, cloud * 0.92);
 
-    // Ocean sun glint where it is not overcast.
+    // Ocean sun glint where it is not overcast. The viewer is not at infinity
+    // once the mesh is magnified (x10 puts it ~6 radii out), so use the true
+    // per-fragment view ray, not the disc-centre direction.
     vec3 refl = reflect(-uSunDirBody, n);
-    float glint = pow(max(dot(refl, uViewDirBody), 0.0), 140.0);
+    vec3 toView = normalize(uViewDirBody * uViewDistBody - n);
+    float glint = pow(max(dot(refl, toView), 0.0), 140.0);
     dayLit += vec3(1.0, 0.95, 0.85) * glint * water * (1.0 - cloud) * 0.5;
 
     // Night side: city lights, dimmed under cloud cover.
@@ -98,6 +102,7 @@ const ATMO_FRAG = /* glsl */ `
   varying vec3 vObjDir;
   uniform vec3 uSunDirBody;
   uniform vec3 uViewDirBody;
+  uniform float uViewDistBody;
   uniform float uBrightness;
 
   const float SHELL = 1.016;   // ~100 km of atmosphere over a 6371 km Earth
@@ -105,8 +110,14 @@ const ATMO_FRAG = /* glsl */ `
   void main() {
     vec3 n = normalize(vObjDir);
     vec3 p = n * SHELL;
-    // Impact parameter: how far this sight line passes from the centre.
-    float pv = dot(p, uViewDirBody);
+    // Impact parameter: how far this sight line passes from the centre. The
+    // ray must come from the actual viewer position — the parallel-ray
+    // shortcut (dot with the centre direction) holds at the true size, where
+    // the viewer is ~60 shell radii out, but a x10 magnified mesh puts the
+    // viewer ~6 radii out, rays diverge up to ~10 deg, and the halo detaches
+    // from the limb.
+    vec3 d = normalize(p - uViewDirBody * uViewDistBody);
+    float pv = dot(p, d);
     float b = sqrt(max(SHELL * SHELL - pv * pv, 0.0));
     // Below 1 the line of sight ends on the surface; above SHELL it never
     // entered the air. Between, it grazes — brightest just above the limb.
@@ -154,6 +165,7 @@ export async function createEarth(renderer) {
     uClouds: { value: emptyClouds },
     uSunDirBody: { value: new THREE.Vector3(1, 0, 0) },
     uViewDirBody: { value: new THREE.Vector3(1, 0, 0) },
+    uViewDistBody: { value: 60.0 }, // viewer distance in globe radii
     uBrightness: { value: 1.0 },
   };
 
@@ -165,6 +177,7 @@ export async function createEarth(renderer) {
   const atmoUniforms = {
     uSunDirBody: uniforms.uSunDirBody,
     uViewDirBody: uniforms.uViewDirBody,
+    uViewDistBody: { value: 60.0 }, // NOT shared: tracks the mesh as drawn
     uBrightness: uniforms.uBrightness,
   };
   // Back faces, so each sight line through the shell is shaded once.
@@ -229,6 +242,7 @@ export async function createEarth(renderer) {
   refreshClouds();
 
   const rotM = new THREE.Matrix4();
+  let displayScale = 1;
 
   return {
     group,
@@ -242,7 +256,24 @@ export async function createEarth(renderer) {
       }
 
       const e = state.earth;
-      const radius = EARTH_DIST * Math.sin(e.angRadiusDeg * Math.PI / 180);
+      // Display choice, not physics: the user can inflate the drawn disc — a
+      // magnifying glass held over the Earth alone. Only this mesh grows, so
+      // the enlarged image covers more of the sky behind it (including the
+      // Sun near new moon), exactly as a magnifier's image does. Everything
+      // computed FROM the Earth — earthshine, eclipse dimming, phase,
+      // orientation, the ephemeris itself — keeps the true angular radius.
+      const radius = EARTH_DIST * Math.sin(e.angRadiusDeg * displayScale * Math.PI / 180);
+      // Two viewer distances, in globe radii. The globe's picture content —
+      // which patch of ocean carries the glint — uses the TRUE geometry, so
+      // nothing on the disc can move with the display dial. The atmosphere
+      // arc instead must hug the limb of the mesh as drawn, and a x10
+      // magnification puts that mesh ~6 radii from the camera, not ~60.
+      // One accepted residue of the enlarged-mesh approach (see PRD): the
+      // visible cap is that of the closer viewpoint, so the outer ~1.4% of
+      // the true disc — already foreshortened to nothing at x1 — slips out
+      // of frame as the dial rises.
+      uniforms.uViewDistBody.value = 1 / Math.sin(e.angRadiusDeg * Math.PI / 180);
+      atmoUniforms.uViewDistBody.value = EARTH_DIST / radius;
       group.position.set(
         e.sceneDir[0] * EARTH_DIST,
         e.sceneDir[1] * EARTH_DIST,
@@ -267,6 +298,9 @@ export async function createEarth(renderer) {
     },
     setBrightness(v) {
       uniforms.uBrightness.value = v;
+    },
+    setScale(s) {
+      displayScale = s;
     },
   };
 }

@@ -61,8 +61,11 @@ Earth all fit in a single frame.
 Drag to look around, wheel to zoom (0.2°–100° field of view — far enough in for Venus to
 show its crescent, Jupiter its belts, and Saturn its rings, tilted as they really are on
 today's date). The bottom dock holds the site
-picker, time-lapse speeds and a date jump. Keys: `1`–`5` speed, `0` back to now, `M` Milky
-Way, `C` constellations, `N` star names, `E` snap to the Earth.
+picker, time-lapse speeds and a date jump. The layers panel (top right) holds the sky
+toggles and the `EARTH ×1–×10` slider, which magnifies the Earth's image alone — its face,
+phase and light stay real, and everything it is drawn over gets covered exactly as a
+magnifier's image would cover it. Keys: `1`–`5` speed, `0` back to now, `M` Milky Way,
+`C` constellations, `N` star names, `E` snap to the Earth.
 
 ## How it is built
 
@@ -80,7 +83,8 @@ Way, `C` constellations, `N` star names, `E` snap to the Earth.
   brightens toward the anti-solar point the way real regolith does.
 - **Earth** — a shader sphere textured from body-frame direction, so its orientation is driven
   straight from the ephemeris. Clouds are fetched live and refreshed every three hours, with a
-  bundled fallback if the network is unavailable.
+  bundled fallback if the network is unavailable. The dock's magnifier scales only this mesh;
+  earthshine, eclipse dimming and the readout all keep the Earth's true angular size.
 - **Stars** — 5,044 stars to magnitude 6 with B−V colour, drawn with a magnitude-driven size
   law and diffraction spikes above first magnitude, plus a deep layer of 349,405 Tycho-2
   stars to magnitude 10 that zooming in lifts out of the background — magnification implies

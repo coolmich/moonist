@@ -29,15 +29,10 @@ const STYLE = /* css */ `
   }
   .btn:hover { color: #eef2f7; background: rgba(255, 255, 255, 0.08); }
   .btn[aria-pressed="true"] { color: #a8ccf5; background: rgba(88, 140, 205, 0.22); }
-  .btn:focus-visible, .card:focus-visible, .dt:focus-visible {
+  .btn:focus-visible, .card:focus-visible, .dt:focus-visible, input.mag:focus-visible {
     outline: 2px solid rgba(150, 190, 240, 0.85); outline-offset: 1px;
   }
   .panel { box-sizing: border-box; }
-  /* Very narrow: stack the layer toggles under the readout so they never collide. */
-  @media (max-width: 560px) {
-    #ui-layers { top: auto; bottom: 70px; right: 8px; }
-    #ui-readout { width: 196px; }
-  }
 
   /* ---- readout, top left ---- */
   #ui-readout {
@@ -71,7 +66,30 @@ const STYLE = /* css */ `
     background: #7fb2ea; margin-right: 7px; vertical-align: middle;
   }
   .when-group { display: flex; align-items: center; gap: 5px; padding: 0 2px; }
-  .when-group .zone { color: #7d8590; font-size: 10.5px; letter-spacing: 0.06em; }
+  .when-group .zone, .earth-group .zone { color: #7d8590; font-size: 10.5px; letter-spacing: 0.06em; }
+  /* The magnifier lives on its own full-width row of the layers panel: a
+     sky-display option like the toggles above it, and the dock stays one row
+     at every width (a 179px group there wrapped it at laptop sizes). */
+  .earth-group {
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 7px; padding: 4px 6px 1px;
+  }
+  .earth-group .x {
+    color: #b6bfcb; font: 500 12px/1 -apple-system, "SF Pro Text", Arial, sans-serif;
+    font-variant-numeric: tabular-nums; width: 32px; text-align: left;
+  }
+  input.mag {
+    appearance: none; -webkit-appearance: none;
+    width: 84px; height: 22px; margin: 0; background: transparent; cursor: pointer;
+  }
+  input.mag::-webkit-slider-runnable-track { height: 3px; border-radius: 1.5px; background: rgba(255,255,255,0.18); }
+  input.mag::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: #9fc2e8; margin-top: -5px; border: 0; transition: background 120ms ease;
+  }
+  input.mag:hover::-webkit-slider-thumb { background: #cfe2f6; }
+  input.mag::-moz-range-track { height: 3px; border-radius: 1.5px; background: rgba(255,255,255,0.18); }
+  input.mag::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #9fc2e8; border: 0; }
   input.dt {
     background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.10);
@@ -88,10 +106,21 @@ const STYLE = /* css */ `
   }
 
   /* ---- layers, top right ---- */
-  #ui-layers { top: 14px; right: 14px; display: flex; gap: 2px; padding: 5px; }
+  /* A column of rows, not a wrapping row: an absolutely-positioned flex
+     container sizes to max-content, which ignores forced wraps and would
+     leave the panel as wide as both rows laid end to end. */
+  #ui-layers { top: 14px; right: 14px; display: flex; flex-direction: column; gap: 2px; padding: 5px; }
+  #ui-layers .layer-row { display: flex; gap: 2px; }
   #ui-layers .btn kbd {
     font: inherit; opacity: 0.5; margin-left: 6px;
     border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; font-size: 10px;
+  }
+  /* Very narrow: stack the layer toggles under the readout so they never
+     collide. Must come after the base #ui-layers rule — same specificity, so
+     source order decides whether top:auto survives. */
+  @media (max-width: 560px) {
+    #ui-layers { top: auto; bottom: 70px; right: 8px; }
+    #ui-readout { width: 196px; }
   }
 
   /* ---- modal sheets (picker, credits) ---- */
@@ -258,18 +287,47 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   // ---- layer toggles -------------------------------------------------------
   const layers = el('div', 'ui panel', hud);
   layers.id = 'ui-layers';
+  const layerRow = el('span', 'layer-row', layers);
   const layerBtns = {};
   for (const [key, label, kbd] of [
     ['milkyWay', 'Milky Way', 'M'],
     ['constellations', 'Constellations', 'C'],
     ['starNames', 'Star names', 'N'],
   ]) {
-    const b = el('button', 'btn', layers, `${label}<kbd>${kbd}</kbd>`);
+    const b = el('button', 'btn', layerRow, `${label}<kbd>${kbd}</kbd>`);
     b.type = 'button';
     b.setAttribute('aria-pressed', String(!!toggles[key]));
     b.addEventListener('click', () => b.setAttribute('aria-pressed', String(onToggle(key))));
     layerBtns[key] = b;
   }
+  // Earth magnifier: a display choice, so its ×N sits right here in the
+  // chrome, never hidden — a giant Earth must always say it is artificial.
+  // Log-mapped so the low end, where a nudge is most visible, gets the most
+  // travel; the left stop is exactly ×1, the real size. Step 0.025 keeps a
+  // drag pixel-smooth while every arrow-key press visibly ticks the label.
+  const magGroup = el('span', 'earth-group', layers);
+  el('span', 'zone', magGroup, 'EARTH');
+  const mag = el('input', 'mag', magGroup);
+  mag.type = 'range';
+  mag.min = '0';
+  mag.max = '1';
+  mag.step = '0.025';
+  mag.title = 'Magnify the Earth. Its face, phase and light stay real — only the image grows.';
+  mag.setAttribute('aria-label', 'Earth image magnification');
+  const magVal = el('span', 'x', magGroup);
+  const fmtMag = (s) => `×${s < 9.95 ? s.toFixed(1) : s.toFixed(0)}`;
+  // Screen readers must hear the ×N the sighted user sees, not the raw
+  // log-mapped 0..1 slider value.
+  const sayMag = (s) => mag.setAttribute('aria-valuetext', fmtMag(s));
+  mag.addEventListener('input', () => {
+    const s = view.setEarthScale(Math.exp(parseFloat(mag.value) * Math.log(view.earthScaleMax)));
+    magVal.textContent = fmtMag(s);
+    sayMag(s);
+    lastMag = s; // this change came from the thumb — don't re-quantize it mid-drag
+  });
+  mag.value = String(Math.log(view.earthScale) / Math.log(view.earthScaleMax));
+  magVal.textContent = fmtMag(view.earthScale);
+  sayMag(view.earthScale);
 
   // ---- dock ----------------------------------------------------------------
   const dock = el('div', 'ui panel', hud);
@@ -489,8 +547,9 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     },
 
     update(state, cloudStatus) {
-      // Earth pointer: only when the Earth's disc is genuinely off screen.
-      const p = view.projectDir(state.earth.sceneDir);
+      // Earth pointer: only when the Earth's disc is genuinely off screen —
+      // the whole disc at its displayed (possibly magnified) size.
+      const p = view.projectDir(state.earth.sceneDir, state.earth.angRadiusDeg * view.earthScale);
       if (p.onScreen) {
         ptr.style.display = 'none';
       } else {
@@ -555,6 +614,15 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
         R.next.textContent = 'not within a month';
       }
 
+      // The magnifier can also be driven through the view API; the chrome
+      // must never disagree with the disc actually drawn.
+      if (view.earthScale !== lastMag) {
+        lastMag = view.earthScale;
+        mag.value = String(Math.log(lastMag) / Math.log(view.earthScaleMax));
+        magVal.textContent = fmtMag(lastMag);
+        sayMag(lastMag);
+      }
+
       const lk = view.look;
       // Below 2° whole degrees round the readout to nothing ("0° fov").
       const fov = lk.fov < 2 ? lk.fov.toFixed(1) : lk.fov.toFixed(0);
@@ -615,6 +683,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
 
   let lastText = 0;
   let lastCards = 0;
+  let lastMag = view.earthScale;
   let atLimitWarned = false;
   syncCards();
   return api;
