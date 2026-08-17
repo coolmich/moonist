@@ -38,7 +38,10 @@ appears again, lit blue-grey by earthshine.
 
 **Earth's phase is the Moon's phase, inverted.** When Earth sees a new Moon, the Moon sees a
 full Earth. When the Earth passes directly between the Sun and the Moon — a lunar eclipse for
-anyone at home — the Sun goes out here, and the simulator models that too.
+anyone at home — the Sun goes out here, and the simulator models that too. And when the Moon
+passes between the Sun and the Earth — a solar eclipse at home — the near side watches its
+own shadow drift across the Earth: a broad dusky penumbra around a tiny dark core, the same
+smudge DSCOVR photographs from L1.
 
 ## Sites
 
@@ -115,7 +118,9 @@ The astronomy is not trusted, it is checked. `npm test` asserts against JPL Hori
 computed for an observer standing on the lunar surface (`CENTER='coord@301'`): Sun and Earth
 altitude/azimuth from two sites at three epochs agree to better than 0.15°, and the
 selenographic sub-Earth and sub-solar points to better than 0.1°. Eclipse geometry is checked
-against astronomy-engine's independent lunar-eclipse search. The terrain tests assert that the
+against astronomy-engine's independent eclipse searches — the Sun's disappearance behind the
+Earth against the lunar-eclipse search, and the Moon's shadow on the Earth against the global
+and local solar-eclipse searches, umbra ground point and city-by-city obscuration alike. The terrain tests assert that the
 extracted patches really do contain Mons Hadley, the Taurus-Littrow massifs and Tycho's walls
 at the right bearings and heights, which is what catches a flipped or transposed elevation
 patch. The rendered face of the Earth has been cross-checked against Fourmilab's independent

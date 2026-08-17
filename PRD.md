@@ -65,8 +65,17 @@ A realistic simulator of standing on the near side of the Moon and looking at th
   outside tone mapping and therefore must NOT be exposure-compensated (this was a real bug).
 - **Compass marks** ride the terrain skyline (not a fixed 0° horizon) and keep full brightness
   in daylight, since they are navigation chrome rather than sky content.
-- **Eclipses are modelled**: `eclipseFraction` from disc-overlap geometry kills sunlight and the
-  Sun's glare when Earth covers it, verified against astronomy-engine's lunar-eclipse search.
+- **Eclipses are modelled, both ways**: `eclipseFraction` from disc-overlap geometry kills
+  sunlight and the Sun's glare when Earth covers it, verified against astronomy-engine's
+  lunar-eclipse search. In the other direction the Earth shader darkens every surface point
+  by the fraction of the Sun the Moon covers as seen from that point (`sunObscuration` in
+  the engine is the shader's node-tested twin), so a solar eclipse at home shows here as the
+  Moon's shadow crossing the disc — a broad penumbral smudge with a ~66 km umbral core —
+  verified against astronomy-engine's global and local solar-eclipse searches (umbra ground
+  point for 2026-08-12 and 2024-04-08; city obscuration to better than 0.5%). The shadow is
+  geometry, not weather: it is right at any epoch, while the cloud map stays today's. The
+  penumbra is drawn neutral — the amber tint DSCOVR photographs (solar limb darkening) is
+  not modelled.
 
 ## Radiometry (the thing that was wrong, and the rule now)
 

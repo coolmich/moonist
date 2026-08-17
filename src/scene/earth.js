@@ -115,11 +115,46 @@ const FRAG = /* glsl */ `
   uniform sampler2D uSpec;
   uniform sampler2D uClouds;
   uniform vec3 uSunDirBody;
+  uniform vec3 uSunPosBody;
+  uniform vec3 uMoonPosBody;
   uniform vec3 uViewDirBody;
   uniform float uViewDistBody;
   uniform float uBrightness;
 
   const float PI = 3.14159265358979;
+  // Radii in Earth radii — the same numbers engine.js uses, whose
+  // sunObscuration() is this code's node-tested twin.
+  const float R_SUN_ER = 109.19793;
+  const float R_MOON_ER = 0.2727044;
+
+  // Fraction of a disc of radius rs hidden by a disc of radius ro, centres
+  // sep apart: the lens formula, mirrored from engine.js discOverlapFraction.
+  float discOverlap(float sep, float rs, float ro) {
+    if (sep >= rs + ro) return 0.0;
+    if (sep <= ro - rs) return 1.0;
+    if (sep <= rs - ro) return (ro * ro) / (rs * rs);
+    float a = clamp((sep * sep + rs * rs - ro * ro) / (2.0 * sep * rs), -1.0, 1.0);
+    float b = clamp((sep * sep + ro * ro - rs * rs) / (2.0 * sep * ro), -1.0, 1.0);
+    float area = rs * rs * (acos(a) - a * sqrt(1.0 - a * a))
+               + ro * ro * (acos(b) - b * sqrt(1.0 - b * b));
+    return area / (PI * rs * rs);
+  }
+
+  // The Moon's shadow: how much of the Sun's disc the Moon covers as seen
+  // from this point of the surface. Lunar parallax (about a degree across
+  // the globe) is the entire eclipse geometry, so both directions come from
+  // the fragment, never the Earth's centre; the half-angle separation keeps
+  // float precision at the milliradian scales an eclipse lives at.
+  float moonCover(vec3 n) {
+    vec3 toSun = uSunPosBody - n;
+    vec3 toMoon = uMoonPosBody - n;
+    float ds = length(toSun);
+    float dm = length(toMoon);
+    float rs = asin(min(R_SUN_ER / ds, 1.0));
+    float rm = asin(min(R_MOON_ER / dm, 1.0));
+    float sep = 2.0 * asin(min(0.5 * length(toSun / ds - toMoon / dm), 1.0));
+    return discOverlap(sep, rs, rm);
+  }
 
   void main() {
     vec3 n = normalize(vObjDir);
@@ -138,7 +173,12 @@ const FRAG = /* glsl */ `
 
     float cosSun = dot(n, uSunDirBody);
     float dayT = smoothstep(-0.03, 0.12, cosSun);   // soft twilight band
-    float diffuse = max(cosSun, 0.0);
+    // During a solar eclipse (the Earth's kind) the near side watches the
+    // Moon's own shadow cross the disc — a broad penumbral smudge with a tiny
+    // umbral core, as DSCOVR photographs it. sunVis is the surviving fraction
+    // of sunlight; away from an eclipse moonCover is identically zero.
+    float sunVis = 1.0 - moonCover(n);
+    float diffuse = max(cosSun, 0.0) * sunVis;
 
     vec3 day = textureGrad(uDay, uv, dUVdx, dUVdy).rgb;
     vec3 nightLights = textureGrad(uNight, uv, dUVdx, dUVdy).rgb;
@@ -180,7 +220,7 @@ const FRAG = /* glsl */ `
     vec3 refl = reflect(-uSunDirBody, n);
     vec3 toView = normalize(uViewDirBody * uViewDistBody - n);
     float glint = pow(max(dot(refl, toView), 0.0), 140.0);
-    dayLit += vec3(1.0, 0.95, 0.85) * glint * water * (1.0 - cover) * 0.5;
+    dayLit += vec3(1.0, 0.95, 0.85) * glint * water * (1.0 - cover) * sunVis * 0.5;
 
     // Night side: city lights, dimmed under cloud cover.
     vec3 nightSide = nightLights * vec3(1.0, 0.86, 0.66) * 0.85 * (1.0 - cover * 0.85);
@@ -272,6 +312,8 @@ export async function createEarth(renderer) {
     uSpec: { value: spec },
     uClouds: { value: emptyClouds },
     uSunDirBody: { value: new THREE.Vector3(1, 0, 0) },
+    uSunPosBody: { value: new THREE.Vector3(23481, 0, 0) },
+    uMoonPosBody: { value: new THREE.Vector3(60, 0, 0) },
     uViewDirBody: { value: new THREE.Vector3(1, 0, 0) },
     uViewDistBody: { value: 60.0 }, // viewer distance in globe radii
     uBrightness: { value: 1.0 },
@@ -424,6 +466,9 @@ export async function createEarth(renderer) {
       const viewBody = mulMV(mt, [-e.sceneDir[0], -e.sceneDir[1], -e.sceneDir[2]]);
       uniforms.uSunDirBody.value.set(sunBody[0], sunBody[1], sunBody[2]).normalize();
       uniforms.uViewDirBody.value.set(viewBody[0], viewBody[1], viewBody[2]).normalize();
+      // Eclipse-shadow geometry, Earth body frame in Earth radii (see FRAG).
+      uniforms.uSunPosBody.value.set(...e.sunPosBody);
+      uniforms.uMoonPosBody.value.set(...e.moonPosBody);
 
       // Take the projection's radial stretch back out of the magnified disc.
       const cm = camera.matrixWorld.elements;
