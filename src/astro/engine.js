@@ -194,6 +194,13 @@ export function skyState(date, site) {
     const toSun = sub(sunVec, v);          // planet → Sun
     const toObs = negate(v);               // planet → observer
     const cosPhase = Math.max(-1, Math.min(1, dot(normalize(toSun), normalize(toObs))));
+    // Spin-axis geometry. RotationAxis gives the IAU north pole in EQJ; its
+    // dot products with the observer and Sun directions are the planetocentric
+    // sub-observer and sub-solar latitudes. For Saturn the sub-observer
+    // latitude is the ring opening angle, and matching signs on the pair mean
+    // the sunlit face of the rings is the one turned toward us.
+    const pole = normalize(vecOf(Astronomy.RotationAxis(Astronomy.Body[name], time).north));
+    const sinLat = (d) => Math.max(-1, Math.min(1, dot(pole, normalize(d))));
     return {
       name,
       ...altAzOf(v),
@@ -203,6 +210,9 @@ export function skyState(date, site) {
       angRadiusDeg: Math.asin(PLANET_RADIUS_KM[name] / distKm) / DEG,
       phaseAngleDeg: Math.acos(cosPhase) / DEG,
       illumFraction: (1 + cosPhase) / 2,
+      poleSceneDir: sceneDirOf(pole),
+      subObsLatDeg: Math.asin(sinLat(toObs)) / DEG,
+      subSunLatDeg: Math.asin(sinLat(toSun)) / DEG,
     };
   });
 

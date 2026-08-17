@@ -53,7 +53,10 @@ product is and `PRD.md` for the requirements and the decision log.
   frame LROC coordinates and Horizons' lunar topocentric output use.
 - **astronomy-engine gotchas**: `RotationAxis().ra` is in *sidereal hours* (multiply by 15),
   `.spin` is unnormalised degrees, `SiderealTime()` returns hours. `GeoVector`'s third
-  argument (aberration) is required.
+  argument (aberration) is required. For planet poles use `RotationAxis().north` (an EQJ
+  vector) directly and skip the ra/dec pitfalls. Horizons' sub-observer/sub-solar latitudes
+  are planeto*detic*; a pole-vector dot product gives planeto*centric* — convert with the
+  body's flattening before comparing (1.9° apart for Saturn even at B = −10°).
 - **Earth orientation** must come from GMST/GAST + `Rotation_EQD_EQJ`, not from
   `RotationAxis(Body.Earth)` — the IAU cartographic Earth model is ~0.65° off in spin, which
   puts the wrong meridian at the centre of the disc.

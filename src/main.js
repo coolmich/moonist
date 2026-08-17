@@ -57,9 +57,11 @@ const look = {
 const ALT_MIN = -Math.PI / 2 + 0.001;
 const ALT_MAX = Math.PI / 2 - 0.001;
 // Zooming in has to reach far enough for a planet to stop being a point:
-// Jupiter is ~45 arcsec, so it only becomes a disc worth the name below about a
-// degree of field. At the old 4° floor nothing could ever resolve.
-const FOV_MIN = 0.5;
+// Jupiter is ~45 arcsec, so it only becomes a disc worth the name below about
+// a degree of field. At 0.2° Venus and Jupiter reach ~45 px and Saturn's ring
+// span ~60 px — decisively past the ~16 px wide-field glare blob, which is
+// what makes the zoom feel like magnification instead of a constant dot.
+const FOV_MIN = 0.2;
 const FOV_MAX = 100;
 
 function applyLook() {
@@ -513,7 +515,7 @@ function renderFrame() {
   if (planets) {
     planets.update(state.planets);
     const cm = camera.matrixWorld.elements;
-    planets.setSunScreenDir(
+    planets.setScreenDirs(
       state.sun.sceneDir,
       [cm[0], cm[1], cm[2]],   // camera right
       [cm[4], cm[5], cm[6]],   // camera up

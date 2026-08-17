@@ -555,7 +555,9 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       }
 
       const lk = view.look;
-      R.look.textContent = `${fmtAlt(lk.alt)} alt · ${fmtAz(lk.az)} az · ${lk.fov.toFixed(0)}° fov`;
+      // Below 2° whole degrees round the readout to nothing ("0° fov").
+      const fov = lk.fov < 2 ? lk.fov.toFixed(1) : lk.fov.toFixed(0);
+      R.look.textContent = `${fmtAlt(lk.alt)} alt · ${fmtAz(lk.az)} az · ${fov}° fov`;
       // Cloud freshness: say when the live map was fetched, and be explicit
       // that clouds are always today's weather — when the clock is far from
       // the present, the geometry time-travels but the weather cannot.

@@ -1,0 +1,25 @@
+{
+  "source": "JPL Horizons API, fetched 2026-08-17; observer on the lunar surface at Grimaldi (CENTER=coord@301, COORD_TYPE=GEODETIC, east-positive); QUANTITIES=14,15 apparent sub-observer and sub-solar planetodetic latitudes in degrees, APPARENT=AIRLESS. For Saturn the sub-observer latitude is the ring opening angle B; the 2029 epoch has the rings wide open so a sign or scale error cannot hide near a plane crossing. Convert to planetocentric with tan(centric) = tan(detic) * (polar/equatorial radius)^2 before comparing with a pole-vector dot product.",
+  "site": { "id": "grimaldi", "lat": -5.38, "lon": -68.36 },
+  "radii": {
+    "Saturn": { "equatorialKm": 60268, "polarKm": 54364 },
+    "Jupiter": { "equatorialKm": 71492, "polarKm": 66854 }
+  },
+  "epochs": [
+    {
+      "t": "2026-09-05T00:00:00Z",
+      "Saturn": { "subObsLatDeg": -10.312519, "subSunLatDeg": -8.904578 },
+      "Jupiter": { "subObsLatDeg": 0.406142, "subSunLatDeg": 0.507237 }
+    },
+    {
+      "t": "2027-03-14T12:00:00Z",
+      "Saturn": { "subObsLatDeg": -11.409542, "subSunLatDeg": -12.305102 },
+      "Jupiter": { "subObsLatDeg": -0.357320, "subSunLatDeg": -0.427840 }
+    },
+    {
+      "t": "2029-06-01T00:00:00Z",
+      "Saturn": { "subObsLatDeg": -25.819195, "subSunLatDeg": -24.796763 },
+      "Jupiter": { "subObsLatDeg": -3.245566, "subSunLatDeg": -3.320740 }
+    }
+  ]
+}

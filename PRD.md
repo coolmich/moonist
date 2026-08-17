@@ -183,15 +183,46 @@ The deeper cause was that a planet had no angular size in the model at all. It d
 all checked against Horizons from the lunar surface — angular diameter to 0.003%, phase angle
 to 0.01°, illuminated fraction to 0.01 points (`tests/fixtures/horizons-planets.json`).
 
+The first fix failed a second dogfooding round (2026-08-17): the glare pinned at a constant
+26 px across the whole zoom range, and then dimmed away at a fixed disc-pixel threshold —
+collapsing a 26 px blob into a ~5 px disc, so Saturn visibly *shrank* while zooming in. Both
+mistakes came from tuning constants instead of stating the law. The law, now enforced by
+`tests/planet-sizes.test.mjs` against real ephemeris states: **zooming in never makes a
+planet smaller, and the glare only yields to a disc of comparable size.**
+
 - **A planet is drawn as two things**: the glare any bright point makes in a lens, bounded
   both in pixels (26) and on the sky (1.5°, so it cannot become a flying saucer at 100° FOV),
-  and the real disc, which grows with magnification. Below about 1.5° of field the disc
-  overtakes the glare and the glare drops to a 9% bloom around it.
+  and the real extent — the disc, or for Saturn the ring span. The handoff between them is
+  keyed on the *ratio* of the two sizes, never on a fixed threshold; the glare holds full
+  strength until the extent rivals it, then eases to a 20% bloom whose footprint spans the
+  disc. (Fading earlier measurably shrank Saturn 22 px → 18 px on screen — the fade window
+  starts at 0.55 of the blob because of that measurement.)
+- **Saturn has rings** — A/B/C zones and the Cassini division at their true radii (1.24–2.27
+  globe radii), foreshortened by the real ring opening angle and rotated to the real pole,
+  both from `RotationAxis` and pinned against Horizons' sub-observer/sub-solar latitudes at
+  three epochs to <0.1° (`tests/fixtures/horizons-rings.json`, planetodetic→centric
+  converted). In 2026 the rings are ~10° open showing the lit south face; date-jump to 2029
+  and they open to 26° with the near arm correctly crossing in front of the globe. Ring
+  brightness tracks how steeply sunlight strikes the ring plane, floored so a near-crossing
+  ring reads as a hairline rather than vanishing (marked display floor). Globe shadow on the
+  rings and ring shadow on the globe are not modeled.
+- **Jupiter has its two equatorial belts**, banded by true planetocentric latitude from the
+  same pole math (illustrative shading, not imagery). From the Moon's eastern horizon the
+  belts can run nearly vertical on screen — that is the honest projection, verified against
+  the computed pole position angle, not a bug.
+- **A resolved disc uses surface brightness, not integrated magnitude.** The point-sprite
+  intensity law saturated Jupiter's disc to featureless white; per-pixel disc brightness now
+  follows geometric albedo over solar distance squared (Venus:Jupiter:Saturn ≈ 66:1:0.24),
+  sqrt-compressed and anchored so Jupiter sits mid-tone at night — a marked display choice,
+  since the eye adapts across that 270:1 span and a screen cannot. Venus stays blinding
+  white, which is correct.
 - **The disc carries its phase.** Venus reaches 66 arcsec as a thin crescent; drawing it round
   once resolved would trade one wrong picture for another. The terminator comes from the true
   phase angle and faces the Sun's actual direction on screen.
-- **Zoom now reaches 0.5°** (was 4°), because at 4° Jupiter is 2.6 px and nothing could ever
-  resolve. At 0.5° Jupiter is ~14 px and Venus up to ~29 px.
+- **Zoom reaches 0.2°** (was 4°, then 0.5°), because the deep end must land somewhere worth
+  arriving: at 0.2° Venus and Jupiter reach ~45 px, Saturn's ring span ~60 px — decisively
+  past the 26 px blob. Measured on-screen profile for Saturn across 65°→0.2°:
+  10 → 27 → 23 → 23 → 22 → 22 → 28 → 49 px, monotone within the ±2 px skirt noise.
 - Two sign conventions here were settled by measurement, not reasoning, after both plausible
   readings produced a crescent facing the wrong way: the screen direction to the Sun is
   computed in JS from the camera's own axes (projecting two nearby points collapses when the
@@ -212,7 +243,7 @@ to 0.01°, illuminated fraction to 0.01 points (`tests/fixtures/horizons-planets
   photograph would resolve more stars. The catalogue's own 5,044 stars stay sharp at any zoom.
 - The map still contains stars fainter than the catalogue's mag-6 limit, down to Gaia depth.
   Those are the point of it — they are the grain the band is made of — but a texel is 2.6
-  arcmin, so at the 0.5° zoom limit it is magnified some 70x and reads as a smooth glow. The
+  arcmin, so at the 0.2° zoom limit it is magnified some 175x and reads as a smooth glow. The
   band is smooth at that scale anyway, but nothing there is sharp.
   The 5,044 stars the app draws itself are subtracted from the map, so nothing is drawn twice.
 
@@ -242,3 +273,9 @@ to 0.01°, illuminated fraction to 0.01 points (`tests/fixtures/horizons-planets
   epochs (0.01° lon) and Fourmilab visually; cloud liveness proven by 66% pixel
   change in 15 h; readout now shows fetch time and "showing today's weather"
   when time-traveling.
+- 2026-08-17: planets rebuilt after a second dogfooding report (Saturn shrank
+  while zooming). Real angular sizes, phases, Saturn's rings and Jupiter's
+  belts from the IAU poles (Horizons-checked to <0.1° at three epochs), disc
+  surface brightness from albedo/d², zoom floor 0.2°. Size law pinned by
+  `tests/planet-sizes.test.mjs`; on-screen sizes verified monotone by
+  screenshot measurement. 34 tests green.

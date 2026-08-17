@@ -58,8 +58,9 @@ Earth all fit in a single frame.
 
 ## Controls
 
-Drag to look around, wheel to zoom (0.5°–100° field of view — far enough in to see Jupiter
-and Venus as discs, and to catch Venus in crescent). The bottom dock holds the site
+Drag to look around, wheel to zoom (0.2°–100° field of view — far enough in for Venus to
+show its crescent, Jupiter its belts, and Saturn its rings, tilted as they really are on
+today's date). The bottom dock holds the site
 picker, time-lapse speeds and a date jump. Keys: `1`–`5` speed, `0` back to now, `M` Milky
 Way, `C` constellations, `N` star names, `E` snap to the Earth.
 
@@ -84,6 +85,10 @@ Way, `C` constellations, `N` star names, `E` snap to the Earth.
   law and diffraction spikes above first magnitude. Labels live in a screen-space canvas layer
   with priority-based collision resolution, so they never overlap, never get clipped at the
   frame edge, and never float in front of a mountain.
+- **Planets** — the five naked-eye planets carry their true angular sizes, phases and spin
+  axes from the ephemeris: zoom in and Venus is a crescent, Jupiter shows its belts, and
+  Saturn its rings at the real opening angle for the date, checked against JPL Horizons.
+  Wide out they are the capped brilliant points a camera would record.
 - **The Milky Way** — everything fainter than those 5,044 stars, which is what the band
   actually is. The map is NASA's Deep Star Maps 2020: not a photograph and not a mosaic, but a
   render of 1.7 billion catalogued stars from Hipparcos-2, Tycho-2 and Gaia DR2, so the star

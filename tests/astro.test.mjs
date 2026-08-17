@@ -241,3 +241,36 @@ test('planet discs and phases match JPL Horizons from the lunar surface', () => 
     }
   }
 });
+
+test('Saturn ring opening and planet axes match JPL Horizons', () => {
+  // The rings are drawn tilted by the real pole, so the pole must be checked:
+  // the sub-observer latitude (for Saturn, the ring opening angle B) and the
+  // sub-solar latitude pin the pole vector against two independent directions.
+  // Horizons reports planetodetic latitudes; the engine's dot-product latitude
+  // is planetocentric, so convert with the body's flattening before comparing.
+  // The 2029 epoch has the rings open to -26°, so a sign or scale error cannot
+  // hide near the 2025 plane crossing.
+  const fix = JSON.parse(readFileSync(
+    fileURLToPath(new URL('./fixtures/horizons-rings.json', import.meta.url)), 'utf8',
+  ));
+  const site = SITES_ALL.find((s) => s.id === fix.site.id);
+  const toCentric = (deticDeg, radii) => {
+    const k = (radii.polarKm / radii.equatorialKm) ** 2;
+    return Math.atan(Math.tan(deticDeg * Math.PI / 180) * k) * 180 / Math.PI;
+  };
+  for (const epoch of fix.epochs) {
+    const s = skyState(new Date(epoch.t), site);
+    for (const name of ['Saturn', 'Jupiter']) {
+      const p = s.planets.find((x) => x.name === name);
+      const radii = fix.radii[name];
+      const obsTruth = toCentric(epoch[name].subObsLatDeg, radii);
+      const sunTruth = toCentric(epoch[name].subSunLatDeg, radii);
+      assert.ok(Math.abs(p.subObsLatDeg - obsTruth) < 0.1,
+        `${name} @ ${epoch.t}: sub-observer lat ${p.subObsLatDeg.toFixed(3)}° vs Horizons ${obsTruth.toFixed(3)}°`);
+      assert.ok(Math.abs(p.subSunLatDeg - sunTruth) < 0.1,
+        `${name} @ ${epoch.t}: sub-solar lat ${p.subSunLatDeg.toFixed(3)}° vs Horizons ${sunTruth.toFixed(3)}°`);
+      assert.ok(Math.abs(Math.hypot(...p.poleSceneDir) - 1) < 1e-9,
+        `${name} pole scene dir is a unit vector`);
+    }
+  }
+});
