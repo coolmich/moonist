@@ -28,11 +28,24 @@ product is and `PRD.md` for the requirements and the decision log.
   relief near the observer can build a false horizon that hides the real one.
   `npm test` pins the rendered skyline against the LOLA-only skyline; if that
   test fails, the landscape is being invented, not textured.
+- **Procedural detail must be band-limited to whatever carries it**, or the
+  carrier's own grid is what reaches the screen. Craters finer than the polar
+  mesh's local cell (`MESH_CELL * distance`) get sampled once per quad and march
+  in rows; noise octaves finer than the pixel footprint (`fwidth`) alias into a
+  lattice, and the slope has to be differenced over that footprint rather than a
+  fixed step. Use gradient noise, never value noise: value noise puts its
+  extrema exactly on the lattice, so any sharpening of it draws the grid.
 
 ## Conventions that bite
 
 - **Scene frame**: +X east, +Y up, +Z south. Azimuth is measured from north through east
   (Horizons convention). Altitude is above the horizon.
+- **Sky directions must be projected from the camera, not the origin.** The eye stands
+  `groundY + 1.7` above the scene origin, so projecting `dir * R` puts a label ~0.1° off —
+  nothing at 65° FOV, a visible gap between a disc and its ring at 4°.
+- **Equirect UV derivatives come from the direction, not from `atan2`.** Differentiate the
+  direction and chain-rule it (`src/scene/earth.js`); `atan2` jumps at the antimeridian and
+  the obvious folded stand-in kinks at ±90°, which over-sharpens the mip in a band there.
 - **Selenographic coordinates** are Mean-Earth/polar-axis frame, east-positive — the same
   frame LROC coordinates and Horizons' lunar topocentric output use.
 - **astronomy-engine gotchas**: `RotationAxis().ra` is in *sidereal hours* (multiply by 15),
@@ -43,6 +56,10 @@ product is and `PRD.md` for the requirements and the decision log.
   puts the wrong meridian at the centre of the disc.
 - **Equirectangular textures** here have 180°W at the left edge, Greenwich at the centre
   (verified by landmark sampling). `u = lon/2π + 0.5`.
+- **The sky texture uses the same convention with RA for longitude**: `u = RA/2π + 0.5`,
+  north at the top row. NASA's source map is stored rotated 180° from that, so
+  `make-milkyway.mjs` mirrors and flips it — and asserts the result before writing, because
+  a mirrored sky still looks like a sky. `npm test` pins it against the IAU galactic frame.
 - **LOLA encoding**: `elevation_m = raw_uint16 * 0.5 - 10000`, relative to a 1737.4 km sphere.
 
 ## Layout
@@ -60,14 +77,21 @@ public/        textures, star catalogs, generated terrain patches
 `window.moonist` exposes `lookAt/look/state/site/setSite/clock` — the UI uses it, and so do
 automated browser checks. Keep it stable.
 
-## Regenerating terrain
+## Regenerating data
 
 `node scripts/make-terrain.mjs` re-extracts every site's patch from NASA's 530 MB LOLA map
 using HTTP range requests (~14 MB per site, ~12 s total). Run it after editing `src/sites.js`.
 Note that geotiff.js cannot be used against that host from here — it opens parallel sockets
 that hit an unreachable IPv6 route, which is why the script parses the TIFF itself over curl.
 
+`node --max-old-space-size=8192 scripts/make-milkyway.mjs` rebuilds the sky texture from the
+130 MB Deep Star Maps EXR (cached in the temp dir after the first run, ~30 s). It also
+rewrites `tests/fixtures/milkyway-grid.json`, which carries the shipped file's SHA-256 — so
+re-encoding the texture without rerunning the script fails the tests, by design. It needs
+`cwebp` on the PATH.
+
 ## Attribution is a licence obligation
 
 The Earth textures are CC BY 4.0 and the cloud data requires the line "Contains modified
-EUMETSAT data". Credits must stay reachable in the shipped UI, not only in the README.
+EUMETSAT data". The Milky Way map is NASA/Goddard SVS with Gaia DR2 from ESA/Gaia/DPAC.
+Credits must stay reachable in the shipped UI, not only in the README.

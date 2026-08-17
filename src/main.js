@@ -3,6 +3,7 @@ import { skyState, nextSunEvent } from './astro/engine.js';
 import { mulMV } from './astro/vec.js';
 import { clock } from './sim/clock.js';
 import { SITES } from './sites.js';
+import { createMilkyWay } from './scene/milkyway.js';
 import { createStarfield, starNameMagCut } from './scene/starfield.js';
 import { createPlanets } from './scene/planets.js';
 import { createLabelLayer } from './scene/labels2d.js';
@@ -152,11 +153,12 @@ const CARDINALS = [
   ['S', 180], ['SW', 225], ['W', 270], ['NW', 315],
 ];
 const SPEEDS = { Digit1: 1, Digit2: 60, Digit3: 3600, Digit4: 86400, Digit5: 604800 };
-const toggles = { constellations: true, starNames: true };
+const toggles = { milkyWay: true, constellations: true, starNames: true };
 
 function toggleLayer(key) {
   toggles[key] = !toggles[key];
   if (key === 'constellations') starfield?.showConstellations(toggles.constellations);
+  if (key === 'milkyWay') milkyway?.setVisible(toggles.milkyWay);
   return toggles[key];
 }
 
@@ -176,6 +178,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (SPEEDS[e.code]) clock.setSpeed(SPEEDS[e.code]);
   if (e.code === 'Digit0') clock.resetToRealTime();
+  if (e.code === 'KeyM') ui?.syncToggle('milkyWay', toggleLayer('milkyWay'));
   if (e.code === 'KeyC') ui?.syncToggle('constellations', toggleLayer('constellations'));
   if (e.code === 'KeyN') ui?.syncToggle('starNames', toggleLayer('starNames'));
   if (e.code === 'KeyE' && latestState) {
@@ -201,6 +204,7 @@ let site = (() => {
   return SITES.find((s) => s.id === 'grimaldi');
 })();
 
+let milkyway = null;
 let starfield = null;
 let planets = null;
 let earth = null;
@@ -242,8 +246,12 @@ async function boot() {
   ]);
   starfield = sf;
   earth = e;
+  milkyway = createMilkyWay(renderer);
+  // The layer keys work before boot finishes, so adopt whatever state they left.
+  milkyway.setVisible(toggles.milkyWay);
   planets = createPlanets(renderer.getPixelRatio());
   sun = createSun();
+  scene.add(milkyway.group);
   scene.add(starfield.group);
   scene.add(planets.group);
   scene.add(earth.group);
@@ -346,7 +354,8 @@ const view = {
   projectDir(dir) {
     const e = camera.matrixWorld.elements;
     const behind = dir[0] * -e[8] + dir[1] * -e[9] + dir[2] * -e[10] < 0;
-    const v = new THREE.Vector3(dir[0], dir[1], dir[2]).multiplyScalar(1000).project(camera);
+    const v = new THREE.Vector3(dir[0], dir[1], dir[2])
+      .multiplyScalar(1000).add(camera.position).project(camera);
     const x = (v.x * 0.5 + 0.5) * window.innerWidth;
     const y = (-v.y * 0.5 + 0.5) * window.innerHeight;
     const pad = 60;
@@ -468,6 +477,11 @@ function renderFrame() {
     }
     return true;
   };
+
+  if (milkyway) {
+    milkyway.setOrientation(state.eqjToScene);
+    milkyway.setDim(starDim);
+  }
 
   const labelItems = [];
   if (starfield) {

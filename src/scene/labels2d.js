@@ -54,7 +54,11 @@ export function createLabelLayer(container) {
         if (it.dir[1] < -0.01) continue; // below the horizon
         // Behind-camera guard: projection mirrors points behind the eye.
         if (it.dir[0] * fwd[0] + it.dir[1] * fwd[1] + it.dir[2] * fwd[2] < 0.05) continue;
-        v.set(it.dir[0], it.dir[1], it.dir[2]).multiplyScalar(1000);
+        // The point has to be built from the eye, not from the scene origin:
+        // the camera stands a metre or two off it, and a fixed 1 km radius
+        // turns that into ~0.1° of parallax — invisible at 65° FOV, but a
+        // 20 px error between a planet's disc and its ring at 4°.
+        v.set(it.dir[0], it.dir[1], it.dir[2]).multiplyScalar(1000).add(camera.position);
         v.project(camera);
         if (v.z > 1 || v.z < -1) continue;
         const x = (v.x * 0.5 + 0.5) * W;

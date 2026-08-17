@@ -33,25 +33,58 @@ const DETAIL_PARS = /* glsl */ `
   uniform vec3 uSunDir;
   uniform float uGrainSeed;
 
-  float mnHash(vec2 p) {
+  // A random unit gradient per lattice point. Value noise was the wrong tool
+  // here: its extrema sit exactly ON the lattice, so every octave marks out its
+  // own grid and the ground reads as woven rather than weathered. Gradient
+  // noise is zero at the lattice points and peaks between them, at positions
+  // the gradients choose.
+  vec2 mnHash2(vec2 p) {
     p = fract(p * vec2(127.31, 311.7) + uGrainSeed);
     p += dot(p, p + 34.19);
-    return fract(p.x * p.y);
+    vec2 h = fract(vec2(p.x * p.y, p.x + p.y * 1.61803)) * 2.0 - 1.0;
+    return h * inversesqrt(max(dot(h, h), 1e-6));
   }
   float mnNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
-    float a = mnHash(i), b = mnHash(i + vec2(1.0, 0.0));
-    float c = mnHash(i + vec2(0.0, 1.0)), d = mnHash(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * 2.0 - 1.0;
+    float a = dot(mnHash2(i), f);
+    float b = dot(mnHash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));
+    float c = dot(mnHash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));
+    float d = dot(mnHash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * 1.6;
   }
   // Dust at centimetre scale, pebbles at decimetre scale. Kept coherent:
   // high-frequency noise dominating reads as TV static, not regolith.
-  float mnGrain(vec2 p) {
-    return mnNoise(p * 24.0) * 0.004
-         + mnNoise(p * 6.0) * 0.018
-         + mnNoise(p * 1.7) * 0.06
-         + pow(max(mnNoise(p * 2.6), 0.0), 5.0) * 0.2;
+  //
+  // Each octave is turned by 40 degrees first. The noise lattice is square and
+  // the scene axes are due east and due south, so stacking octaves on one
+  // orientation lines the pebbles up in rows — which is the one thing real
+  // regolith never does.
+  const mat2 MN_TURN = mat2(0.76604, -0.64279, 0.64279, 0.76604);
+
+  // An octave whose wavelength has dropped near the size of a pixel cannot be
+  // sampled any more: what reaches the screen is the lattice it was built on,
+  // not the dust it stands for. Fade each one out as it approaches that limit.
+  float mnBand(float fp, float freq) {
+    return 1.0 - smoothstep(0.15, 0.4, fp * freq);
+  }
+
+  float mnGrain(vec2 p, float fp) {
+    // Value noise puts its extrema on the lattice, so raising one octave to a
+    // high power — which is what makes the pebbles — lays down exactly one
+    // pebble per cell, in rows. Warping the domain with a slower noise first
+    // scatters them; rotating alone only turns the rows diagonal.
+    vec2 w = vec2(mnNoise(p * 0.83), mnNoise(p * 0.83 + 41.7)) * 0.75;
+    vec2 a = p;
+    float h = mnNoise(a * 24.0) * 0.004 * mnBand(fp, 24.0);
+    a = MN_TURN * a;
+    h += mnNoise(a * 6.0) * 0.018 * mnBand(fp, 6.0);
+    a = MN_TURN * a;
+    h += mnNoise(a * 1.7) * 0.06 * mnBand(fp, 1.7);
+    vec2 q = MN_TURN * (p + w);
+    h += pow(max(mnNoise(q * 2.6), 0.0), 5.0) * 0.13 * mnBand(fp, 2.6);
+    h += pow(max(mnNoise((MN_TURN * q) * 1.61 + 7.3), 0.0), 5.0) * 0.13 * mnBand(fp, 1.61);
+    return h;
   }
 `;
 
@@ -144,10 +177,15 @@ export async function createTerrain(site) {
           float grain = 1.0 / (1.0 + camDist * camDist / 400.0);
           if (grain > 0.004) {
             vec2 p = vWorldPos.xz;
-            float e = min(0.03 + camDist * 0.0015, 0.1);
-            float h0 = mnGrain(p);
-            float hx = mnGrain(p + vec2(e, 0.0));
-            float hz = mnGrain(p + vec2(0.0, e));
+            // World size of one pixel here. The slope has to be measured over
+            // about that distance: the old fixed 3 cm step straddled the 4 cm
+            // dust octave, and differencing across a wavelength turns dust into
+            // a tidy grid of dimples — which is what the ground used to show.
+            float fp = max(fwidth(vWorldPos.x), fwidth(vWorldPos.z));
+            float e = max(fp, 0.012);
+            float h0 = mnGrain(p, fp);
+            float hx = mnGrain(p + vec2(e, 0.0), fp);
+            float hz = mnGrain(p + vec2(0.0, e), fp);
             vec3 bump = vec3(-(hx - h0) / e, 0.0, -(hz - h0) / e) * grain;
             normal = normalize(normal + bump);
           }

@@ -5,9 +5,9 @@ Stand on the near side of the Moon and look up.
 Moonist is a real-time simulator of the lunar sky as seen from the ground. The Earth hangs
 nearly motionless overhead showing the face it is actually turning toward the Moon right
 now, with live cloud cover and a real day/night terminator. The Sun crawls across the sky
-over the true 29.5-day synodic cycle. Five thousand real stars and the constellations sit
-behind it all, and the ground underfoot is built from NASA's laser altimetry of the actual
-landing sites.
+over the true 29.5-day synodic cycle. Five thousand real stars, the constellations and the
+Milky Way sit behind it all, and the ground underfoot is built from NASA's laser altimetry of
+the actual landing sites.
 
 ```
 npm install
@@ -28,10 +28,12 @@ horizon out by the limb.
 cycle takes 29.53. The readout gives you the local solar clock and how many Earth days you
 are from the next sunrise, because "06:00" means something very different here.
 
-**The sky is black in daylight.** There is no atmosphere to scatter sunlight, so the stars
-never go away — but the camera exposure that makes the sunlit regolith look right leaves
-them nearly invisible, exactly as in the Apollo photographs. At night the exposure opens up
-and the ground appears again, lit blue-grey by earthshine.
+**The sky is black in daylight.** There is no atmosphere to scatter sunlight, so nothing here
+can dim a star — the stars never go away. What hides them is the camera: the exposure that
+makes sunlit regolith look right leaves them invisible, exactly as in the Apollo photographs.
+Because a grazing Sun lights the ground at only sin(altitude) of its noon strength, that
+happens gradually — the stars survive sunrise and fade over the first few degrees, and at
+night the exposure opens up and the ground appears again, lit blue-grey by earthshine.
 
 **Earth's phase is the Moon's phase, inverted.** When Earth sees a new Moon, the Moon sees a
 full Earth. When the Earth passes directly between the Sun and the Moon — a lunar eclipse for
@@ -47,7 +49,7 @@ Six near-side sites, all with coordinates in the Mean-Earth/polar-axis frame:
 | Apollo 15 — Hadley/Apennines | 26.13°N, 3.63°E | ~64° up | 4.5 km massifs on the skyline |
 | Apollo 17 — Taurus-Littrow | 20.19°N, 30.77°E | ~54° up | valley walled by 2 km massifs |
 | Chang'e 3 — Mare Imbrium | 44.12°N, 19.51°W | ~43° up | young flat basalt |
-| Tycho — crater floor | 43.30°S, 11.22°W | ~45° up | bright highlands, terraced walls |
+| Tycho — crater floor | 43.30°S, 10.55°W | ~45° up | bright highlands, terraced walls |
 | Grimaldi — western limb | 5.38°S, 68.36°W | ~21° up | dark basin floor, Earth low |
 
 Grimaldi is the default because it is the one place where the ground, the horizon and the
@@ -56,8 +58,8 @@ Earth all fit in a single frame.
 ## Controls
 
 Drag to look around, wheel to zoom (4°–100° field of view). The bottom dock holds the site
-picker, time-lapse speeds and a date jump. Keys: `1`–`5` speed, `0` back to now, `C`
-constellations, `N` star names, `E` snap to the Earth.
+picker, time-lapse speeds and a date jump. Keys: `1`–`5` speed, `0` back to now, `M` Milky
+Way, `C` constellations, `N` star names, `E` snap to the Earth.
 
 ## How it is built
 
@@ -80,6 +82,14 @@ constellations, `N` star names, `E` snap to the Earth.
   law and diffraction spikes above first magnitude. Labels live in a screen-space canvas layer
   with priority-based collision resolution, so they never overlap, never get clipped at the
   frame edge, and never float in front of a mountain.
+- **The Milky Way** — everything fainter than those 5,044 stars, which is what the band
+  actually is. The map is NASA's Deep Star Maps 2020: not a photograph and not a mosaic, but a
+  render of 1.7 billion catalogued stars from Hipparcos-2, Tycho-2 and Gaia DR2, so the star
+  clouds and the dust lanes are where the catalogue puts them rather than where an artist did.
+  `scripts/make-milkyway.mjs` resamples it into the sky convention used here, subtracts the
+  5,044 stars the app draws itself so nothing appears twice, and keeps its linear radiometry,
+  so it rides the same exposure curve as the stars: washed out at lunar noon, vivid through
+  the two-week night.
 
 ## Verification
 
@@ -104,3 +114,5 @@ Earth-from-Moon calculation and agrees to 0.003°.
   Maps (CC0).
 - Star and constellation data: **d3-celestial** by Olaf Frohn — BSD 3-Clause, built on the XHIP
   extended Hipparcos compilation.
+- Milky Way: **Deep Star Maps 2020**, NASA/Goddard Space Flight Center Scientific Visualization
+  Studio (Ernie Wright). Gaia DR2: **ESA/Gaia/DPAC**.

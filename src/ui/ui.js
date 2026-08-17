@@ -197,6 +197,7 @@ const CREDITS = [
   ['Solar System Scope', 'Earth day, night and specular maps', 'CC BY 4.0'],
   ['EUMETSAT, via Matt Eason’s Live Cloud Maps', 'the live cloud cover, refreshed every three hours', 'Contains modified EUMETSAT data — maps CC0'],
   ['d3-celestial and the XHIP catalogue', '5,044 stars and the constellation figures', 'BSD 3-Clause — Olaf Frohn'],
+  ['NASA SVS Deep Star Maps 2020', 'the Milky Way, rendered from 1.7 billion catalogued stars', 'NASA/Goddard SVS; Gaia DR2: ESA/Gaia/DPAC'],
 ];
 
 function fmtAlt(deg) {
@@ -258,6 +259,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   layers.id = 'ui-layers';
   const layerBtns = {};
   for (const [key, label, kbd] of [
+    ['milkyWay', 'Milky Way', 'M'],
     ['constellations', 'Constellations', 'C'],
     ['starNames', 'Star names', 'N'],
   ]) {

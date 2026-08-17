@@ -25,6 +25,9 @@ const FBM_MID_M = 0.30;       // amplitude of the 30 m undulation
 const FBM_FAR_M = 0.85;       // amplitude of the 260 m undulation
 const NEAR_FLAT_R = 14;       // metres of locally undisturbed ground underfoot
 const NEAR_FLAT_BLEND = 55;   // ...blending to full coarse detail by this range
+// Ring spacing of the renderer's polar mesh as a fraction of distance; the
+// smallest feature it can hold at range r is about r * this.
+const MESH_CELL = 0.035;
 
 function hash2(ix, iy, seed) {
   let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(seed, 2246822519);
@@ -52,13 +55,27 @@ function valueNoise(x, y, seed) {
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
 }
 
+// Every lattice here is square and axis-aligned, and the scene's axes are due
+// east and due south. Stack a few of them and the eye finds the rows: real
+// regolith has no preferred direction, so each octave and each crater class is
+// turned by an angle that is not a fraction of a right angle, which leaves the
+// statistics alone and destroys the alignment.
+const LATTICE_TURN = 0.6981317; // 40°, so classes cycle 40/80/120... never 90
+function turn(x, y, k) {
+  const a = k * LATTICE_TURN;
+  const c = Math.cos(a), s = Math.sin(a);
+  return [x * c - y * s, x * s + y * c];
+}
+
 export function fbm(x, y, seed, octaves) {
   let amp = 1, freq = 1, sum = 0, norm = 0;
+  let px = x, py = y;
   for (let o = 0; o < octaves; o++) {
-    sum += amp * valueNoise(x * freq, y * freq, seed + o * 101);
+    sum += amp * valueNoise(px * freq, py * freq, seed + o * 101);
     norm += amp;
     amp *= 0.5;
     freq *= 2.1;
+    [px, py] = turn(px, py, 1);
   }
   return sum / norm;
 }
@@ -70,7 +87,12 @@ function craters(x, y, seed, dist, coarseWeight) {
   let rim = 0;
   for (let c = 0; c < CLASS_COUNT; c++) {
     const R = R0 * Math.pow(2, c);
-    if (R < dist * 4e-4) continue;               // finer than a pixel out there
+    // Band-limit to what the mesh can actually carry. The ground is a polar
+    // grid whose cells grow with distance (~0.038 r), so a crater smaller than
+    // a cell out there is not drawn small — it is sampled once per quad, and
+    // the mesh's own regularity becomes a lattice of identical dimples marching
+    // across the surface. Below this size the per-fragment grain takes over.
+    if (R < dist * MESH_CELL) continue;
     const coarse = R >= COARSE_FROM;
     const w = coarse ? coarseWeight : 1;
     if (w < 0.01) continue;
@@ -78,7 +100,11 @@ function craters(x, y, seed, dist, coarseWeight) {
     // because anything much larger starts to be carried by the LOLA data.
     const density = R < 2 ? 0.82 : R < 8 ? 0.55 : R < 24 ? 0.3 : R < 60 ? 0.16 : 0.09;
     const cell = R * CELL_FACTOR;
-    const gx = Math.floor(x / cell), gy = Math.floor(y / cell);
+    // Each class gets its own lattice orientation. Cell sizes are exact powers
+    // of two of each other, so without this the classes nest and their craters
+    // fall into shared rows running due east and due south.
+    const [rx, ry] = turn(x, y, c);
+    const gx = Math.floor(rx / cell), gy = Math.floor(ry / cell);
     for (let ox = -1; ox <= 1; ox++) {
       for (let oy = -1; oy <= 1; oy++) {
         const cx = gx + ox, cy = gy + oy;
@@ -90,7 +116,9 @@ function craters(x, y, seed, dist, coarseWeight) {
         const age = hash2(cx, cy, s + 4);        // 0 fresh, 1 degraded
         const depth = rad * (0.04 + 0.12 * (1 - age) ** 1.5);
         const rimH = rad * (0.012 + 0.03 * (1 - age));
-        const d = Math.hypot(x - px, y - py);
+        // Rotation preserves distance, so the crater is still round in world
+        // space; only where its centre falls has changed.
+        const d = Math.hypot(rx - px, ry - py);
         const t = d / rad;
         if (t < 1) {
           const b = 1 - t * t;
@@ -113,9 +141,10 @@ function boulders(x, y, seed, dist) {
   let h = 0;
   for (let c = 0; c < 3; c++) {
     const R = 0.22 * Math.pow(2.4, c);
-    if (R < dist * 4e-4) continue;
+    if (R < dist * MESH_CELL) continue;          // as for craters: mesh-limited
     const cell = R * 16;
-    const gx = Math.floor(x / cell), gy = Math.floor(y / cell);
+    const [rx, ry] = turn(x, y, c + 0.5);
+    const gx = Math.floor(rx / cell), gy = Math.floor(ry / cell);
     for (let ox = -1; ox <= 1; ox++) {
       for (let oy = -1; oy <= 1; oy++) {
         const cx = gx + ox, cy = gy + oy;
@@ -124,7 +153,7 @@ function boulders(x, y, seed, dist) {
         const px = (cx + hash2(cx, cy, s + 1)) * cell;
         const py = (cy + hash2(cx, cy, s + 2)) * cell;
         const rad = R * (0.6 + 0.8 * hash2(cx, cy, s + 3));
-        const d = Math.hypot(x - px, y - py);
+        const d = Math.hypot(rx - px, ry - py);
         if (d < rad) h += rad * 0.7 * Math.sqrt(Math.max(1 - (d / rad) ** 2, 0));
       }
     }

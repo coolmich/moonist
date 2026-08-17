@@ -20,6 +20,13 @@ A realistic simulator of standing on the near side of the Moon and looking at th
 - **Frames**: scene = local horizon frame, +X East, +Y Up, +Z South; azimuth N=0/E=90 (Horizons convention). Selenographic coords are Mean-Earth frame, east-positive — same as Horizons and LROC.
 - **Live clouds**: `https://clouds.matteason.co.uk/images/4096x2048/clouds-alpha.png` (CORS `*` verified; EUMETSAT-derived; updates every 3 h; CC0 with required line "Contains modified EUMETSAT data"). Bundled fallback at `public/textures/clouds-fallback.png`.
 - **Earth textures**: Solar System Scope 8K day/night + 2K specular (CC BY 4.0), landmark-verified equirectangular, 180°W at left edge.
+- **Milky Way**: NASA SVS *Deep Star Maps 2020* (`starmap_2020_8k.exr`, svs.gsfc.nasa.gov/4851)
+  — a render of 1.7 billion catalogued stars (Hipparcos-2 < mag 8, Tycho-2 to 11.5, Gaia DR2
+  beyond), linear-light EXR, plate carrée in ICRF/J2000. Chosen over the ESO GigaGalaxy Zoom
+  panorama (a genuine photographic mosaic, and its 800 Mpx original is not freely
+  redistributable) and over the ESA Gaia flux map (CC BY-SA share-alike, galactic frame): the
+  user's requirement was explicitly "not some photo concating", and a catalogue render is
+  literally not a photograph. Credit NASA/Goddard SVS; Gaia DR2 ESA/Gaia/DPAC.
 - **Stars**: d3-celestial `stars.6.json` (5044 stars to mag 6, XHIP/Hipparcos, BSD-3); coordinates are GeoJSON [lon,lat] deg where lon = RA mapped to −180..180. Constellation lines + localized names from same source. `starnames.min.json` = 493 named stars (trimmed at build time from starnames.json).
 - **Terrain**: NASA CGI Moon Kit LOLA displacement (`ldem_16_uint.tif`, 16 ppd, uint16 half-meters, elev_m = raw·0.5 − 10000) → per-site patches preprocessed by a node script → real distant relief; procedural regolith detail near-field. LROC color map for albedo tinting.
 - **Candidate sites** (ME-frame coords, LROC/IAU-verified): Apollo 11 (0.674, 23.473), Apollo 15 (26.132, 3.633), Apollo 17 (20.191, 30.772), Chang'e 3 (44.121, −19.512), Tycho (−43.30, −11.22), Grimaldi (−5.38, −68.36; Earth low at ~21° — the showcase "Earth on the horizon" site).
@@ -66,9 +73,20 @@ three.js only injects the *helpers*. Because the sky shaders omitted them, the
 JS-side "divide by exposure, the renderer multiplies it back" contract silently
 failed and sky brightness ran backwards. The rule now:
 
-- **Ground, stars, planets** are scene-linear and tone-mapped: no exposure
-  compensation. They brighten as the camera opens up at night and wash out at
-  lunar noon, which is why the Apollo surface photographs have empty skies.
+- **Ground, stars, planets and the Milky Way** are scene-linear and tone-mapped.
+  They wash out at lunar noon, which is why the Apollo surface photographs have
+  empty skies. The Milky Way belongs in this list on physical grounds, not just
+  for consistency: it *is* the stars, the ones too faint to draw individually.
+- **The sky does not ride the earthshine ramp.** Night exposure climbs with
+  earthshine so the lit ground stays visible; that is a device for the ground.
+  A fuller Earth cannot make the Milky Way brighter — there is no air to scatter
+  its light — so sky objects divide that part of the exposure back out and hold
+  steady through the month. Only the Sun changes how bright the sky reads.
+- **Daylight wash follows illuminance, not sunrise.** The ground takes sin(alt)
+  of its noon light, so the Sun clearing the horizon barely lights anything and
+  the camera stays open through it. Keying the wash to the Sun merely being up
+  put the stars out the instant it rose, which looked like an atmosphere doing
+  it. They now fade across the first ~6° of altitude, about half an Earth day.
 - **The Earth** *is* exposure-compensated (`K / E`). Its real brightness against
   earthshine-lit ground is a ratio of order 10⁶; holding its appearance steady
   is a deliberate camera-like compromise so the hero object stays readable.
@@ -85,6 +103,58 @@ inside a fabricated crater. `npm test` asserts the rendered skyline tracks the
 LOLA skyline to under 1.2° peak and 0.3° mean at every site; a systematic offset
 is the signature of an invented landscape.
 
+## Milky Way decisions (2026-08-16)
+
+- **The texture is data, not a picture.** The requirement was "not some photo concating", and
+  the source is a catalogue render, so every star cloud and dust lane is where Gaia says it is.
+  The build script asserts the band lies on the galactic equator and that the bulge is the
+  Sagittarius star cloud rather than the anticentre *before* it writes anything, because a
+  mirrored or rotated sky still looks like a sky. `npm test` re-checks the shipped pixels
+  against the IAU galactic frame; all three wrong flip/mirror combinations fail it.
+- **Linear in, camera out.** The texture carries the source's linear radiance under an sRGB
+  transfer curve (scaled x3, which the shader divides out — eight bits of raw linear would put
+  the faint sky at code 1-2). Nothing photographic is baked in: the exposure ramp and ACES do
+  that work, so the band responds to the lunar day exactly as the stars do.
+- **8192x4096 at WebP q68, 5.6 MB.** 4096 was measurably mushy once zoomed past ~40° FOV, and
+  8192 costs 4 MB more; the band is the headline of the sky, so it got the pixels. Dither
+  turned out to cost only 0.7% of the file, so it stayed — the faint-star grain is what the
+  bits actually buy.
+- **It loads after the first frame and fades in over 700 ms**, rather than holding up boot for
+  5.6 MB the way the Earth textures do.
+- **The catalogue's own stars are subtracted from the map.** Left in, each of the 5,044 was a
+  core clipped by the gain, added on top of its own sprite by the star layer's additive
+  blending: a mag-6 star and a mag-1 star ended up with the same white centre, and at the 4°
+  zoom limit they became visible white squares. The build script pulls each one down to the
+  local background measured in an annulus around it. Measured after: no residual core above
+  0.25 linear (every bright star used to saturate), median residual 1.15x the background.
+- **Brightness is a display choice**, marked as such in the code: the star renderer is already
+  on a compressed magnitude curve rather than a flux scale (a mag-2 sprite is half a degree
+  wide where the real star is arcseconds), so no single constant can be physical for both.
+  It is set so the Sagittarius cloud holds its structure at the top of the night exposure ramp
+  instead of blowing out, which is where a bright band stops reading as a photograph.
+
+## Dogfood round, 2026-08-16 (all five findings were real)
+
+- **Nothing on the Moon can dim a star, and the code was pretending otherwise.** See the
+  radiometry rule above: the wash now follows ground illuminance, so stars survive a sunrise.
+- **Procedural detail must be band-limited to whatever carries it.** The ground's grain was
+  differenced over a fixed 3 cm step while its finest octave has a 4 cm wavelength, so what
+  reached the screen was the noise lattice, not dust: a grid of identical dimples marching in
+  rows. Octaves now fade out as their wavelength approaches the pixel footprint, the slope is
+  measured over that footprint, and crater classes finer than the polar mesh's local cell are
+  dropped rather than sampled once per quad. The noise itself moved from value to gradient —
+  value noise puts its extrema *on* the lattice, so every octave advertises its own grid.
+- **Sky labels were projected from the scene origin, not the eye.** A fixed 1 km radius turns
+  the camera's 1.7 m eye height into ~0.1° of parallax: invisible at 65° FOV, but a 9 px gap
+  between the Earth's disc and its identification ring at 4°. Measured 9.3 px before, 0.9 after.
+- **The equirect antimeridian fix had a kink.** Differentiating `atan(y, |x|)` as a stand-in
+  for longitude is continuous but folds at x = 0, where its derivative cancels and the mip
+  selection over-sharpens — a band of aliasing that sat still while the Earth turned through
+  it. Both spheres now differentiate the direction and apply the chain rule, which is exact.
+  Measured column sharpness at the right limb: 1.59x the disc mean before, 0.57x after.
+- **The Milky Way was too bright**, for the two reasons above it: it rode the earthshine ramp,
+  and it carried the catalogue's stars as clipped white cores.
+
 ## Known limits
 
 - The star catalogue is J2000 with no proper motion or aberration: the fastest-
@@ -93,6 +163,13 @@ is the signature of an invented landscape.
   ~4.7 km of relief against a true ~4.5 km above the plain, and features between
   roughly 200 m and 500 m fall between the DEM and the procedural cascade.
 - The clock is clamped to 1700–2200, the range where the ephemeris is trustworthy.
+- The Milky Way map is 2.6 arcmin per pixel, so it is sharp at the default field of view and
+  progressively softer as you zoom in; below ~20° FOV it is visibly a smooth glow where a real
+  photograph would resolve more stars. The catalogue's own 5,044 stars stay sharp at any zoom.
+- The map still contains stars fainter than the catalogue's mag-6 limit, down to Gaia depth.
+  Those are the point of it — they are the grain the band is made of — but a texel is 2.6
+  arcmin, so at the 4° zoom limit the brightest of them are soft dots rather than points.
+  The 5,044 stars the app draws itself are subtracted from the map, so nothing is drawn twice.
 
 ## Checkpoints
 

@@ -41,12 +41,15 @@ const FRAG = /* glsl */ `
     float lon = atan(n.y, n.x);            // east-positive, 0 at Greenwich
     float lat = asin(clamp(n.z, -1.0, 1.0));
     vec2 uv = vec2(lon / (2.0 * PI) + 0.5, lat / PI + 0.5);
-    // atan2 jumps by a full turn at the antimeridian, so the u derivative
-    // explodes there and the hardware picks the smallest mip: a bright seam
-    // down the mid-Pacific. Differentiate a continuous stand-in instead.
-    vec2 uvA = vec2(atan(n.y, abs(n.x)) / (2.0 * PI), uv.y);
-    vec2 dUVdx = vec2(dFdx(uvA.x), dFdx(uv.y));
-    vec2 dUVdy = vec2(dFdy(uvA.x), dFdy(uv.y));
+    // atan2 jumps by a full turn at the antimeridian, so dFdx(uv) is garbage
+    // there and the hardware picks the smallest mip: a bright seam down the
+    // mid-Pacific. Differentiate the direction and apply the chain rule
+    // instead — exact, and continuous everywhere except exactly on the poles.
+    vec3 dndx = dFdx(n), dndy = dFdy(n);
+    float k = 1.0 / (2.0 * PI * max(n.x * n.x + n.y * n.y, 1e-12));
+    float p = 1.0 / (PI * sqrt(max(1.0 - n.z * n.z, 1e-12)));
+    vec2 dUVdx = vec2((n.x * dndx.y - n.y * dndx.x) * k, dndx.z * p);
+    vec2 dUVdy = vec2((n.x * dndy.y - n.y * dndy.x) * k, dndy.z * p);
 
     float cosSun = dot(n, uSunDirBody);
     float dayT = smoothstep(-0.03, 0.12, cosSun);   // soft twilight band
