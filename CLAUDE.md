@@ -61,7 +61,9 @@ product is and `PRD.md` for the requirements and the decision log.
   `RotationAxis(Body.Earth)` — the IAU cartographic Earth model is ~0.65° off in spin, which
   puts the wrong meridian at the centre of the disc.
 - **Equirectangular textures** here have 180°W at the left edge, Greenwich at the centre
-  (verified by landmark sampling). `u = lon/2π + 0.5`.
+  (verified by landmark sampling). `u = lon/2π + 0.5`. Anything stamped into or measured on
+  one must use the sky metric — plate carrée stretches features by 1/cos(lat), and a
+  circular star-subtraction disc left a 0.94-radiance streak at Dec −86°.
 - **The sky texture uses the same convention with RA for longitude**: `u = RA/2π + 0.5`,
   north at the top row. NASA's source map is stored rotated 180° from that, so
   `make-milkyway.mjs` mirrors and flips it — and asserts the result before writing, because
@@ -90,14 +92,21 @@ using HTTP range requests (~14 MB per site, ~12 s total). Run it after editing `
 Note that geotiff.js cannot be used against that host from here — it opens parallel sockets
 that hit an unreachable IPv6 route, which is why the script parses the TIFF itself over curl.
 
+`node scripts/make-deepstars.mjs` rebuilds the Tycho-2 deep star layer
+(`public/data/deepstars.bin`, stars to V 10) from VizieR TAP (~20 MB, cached in the temp
+dir) and rewrites `tests/fixtures/deepstars-meta.json` with the file's SHA-256.
+
 `node --max-old-space-size=8192 scripts/make-milkyway.mjs` rebuilds the sky texture from the
-130 MB Deep Star Maps EXR (cached in the temp dir after the first run, ~30 s). It also
-rewrites `tests/fixtures/milkyway-grid.json`, which carries the shipped file's SHA-256 — so
+130 MB Deep Star Maps EXR (cached in the temp dir after the first run; ~3 min, most of it
+subtracting the 354k drawn stars). Run it **after** make-deepstars: it reads
+`deepstars.bin` to know what to subtract. It also rewrites
+`tests/fixtures/milkyway-grid.json`, which carries the shipped file's SHA-256 — so
 re-encoding the texture without rerunning the script fails the tests, by design. It needs
 `cwebp` on the PATH.
 
 ## Attribution is a licence obligation
 
 The Earth textures are CC BY 4.0 and the cloud data requires the line "Contains modified
-EUMETSAT data". The Milky Way map is NASA/Goddard SVS with Gaia DR2 from ESA/Gaia/DPAC.
+EUMETSAT data". The Milky Way map is NASA/Goddard SVS with Gaia DR2 from ESA/Gaia/DPAC. The
+deep star layer is the Tycho-2 catalogue (Høg et al. 2000, ESA Hipparcos mission).
 Credits must stay reachable in the shipped UI, not only in the README.

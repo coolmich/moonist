@@ -17,6 +17,7 @@ const STAR_VERT = /* glsl */ `
   uniform float uZoom;       // apparent-size zoom factor (1 at default FOV)
   uniform float uPixelRatio;
   uniform float uDim;
+  uniform float uMagBias;    // aperture gain: zoom brightens points, never the sky
   varying vec3 vColor;
   varying float vIntensity;
   varying float vSharp;
@@ -32,7 +33,12 @@ const STAR_VERT = /* glsl */ `
     // Scene-linear radiance. This rides the same exposure and tone mapping as
     // the ground, so a mag-2 star lands near white at night and the sunlit
     // surface washes the sky out by day, exactly as a camera does.
-    vIntensity = clamp(0.075 * pow(10.0, -0.25 * (aMag - 2.0)), 0.0015, 4.0) * uDim;
+    // uMagBias is the telescope conceit's other half: magnification implies
+    // aperture, and aperture brightens point sources while extended glow
+    // keeps constant surface brightness — so deep zoom lifts the stars
+    // against the Milky Way texture, which is physically what a bigger
+    // objective does. Zero at wide field; tied to zoom, never to the Sun.
+    vIntensity = clamp(0.075 * pow(10.0, -0.25 * (aMag - uMagBias - 2.0)), 0.0015, 4.0) * uDim;
     vColor = aColor;
     gl_PointSize = sizeCss * uPixelRatio;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -137,6 +143,7 @@ export async function createStarfield(pixelRatio) {
     uZoom: { value: 1 },
     uPixelRatio: { value: pixelRatio ?? 1 },
     uDim: { value: 1 },
+    uMagBias: { value: 0 },
   };
   const starMat = new THREE.ShaderMaterial({
     uniforms: starUniforms,
@@ -150,6 +157,62 @@ export async function createStarfield(pixelRatio) {
   points.frustumCulled = false;
   points.renderOrder = 2; // stars draw over constellation lines, not under
   group.add(points);
+
+  // --- Deep layer: Tycho-2 to V 10 -------------------------------------------
+  // Every star the app draws as a point, fainter than the 5,044: the Milky Way
+  // texture carries only the light *below* V 10, so these are drawn at every
+  // field of view — at 65° they are the band's sub-perceptual grain (the
+  // airless Moon's naked-eye limit genuinely runs past mag 6), and zoomed in
+  // they are the sharp points the texture's magnified speckle could never be.
+  // 3.5 MB, loaded alongside the first frames like the Milky Way map.
+  const DEEP_FOV = 14; // where the aperture gain starts to ramp
+  const deepUniforms = {
+    uZoom: starUniforms.uZoom, // shared: one zoom, two materials
+    uPixelRatio: starUniforms.uPixelRatio,
+    uDim: starUniforms.uDim,
+    uMagBias: starUniforms.uMagBias,
+  };
+  let deepPoints = null;
+  function loadDeep() {
+    fetch('/data/deepstars.bin')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((ab) => {
+        const view = new DataView(ab);
+        const n2 = view.getUint32(4, true);
+        const pos = new Float32Array(n2 * 3);
+        const mag = new Float32Array(n2);
+        const col = new Float32Array(n2 * 3);
+        for (let i = 0; i < n2; i++) {
+          const o = 8 + i * 10;
+          const v = coordToVec(view.getFloat32(o, true), view.getFloat32(o + 4, true), SKY_RADIUS);
+          pos.set([v.x, v.y, v.z], i * 3);
+          mag[i] = view.getUint8(o + 8) / 32 + 4.0;
+          col.set(bvToRgb(view.getUint8(o + 9) / 64 - 0.5), i * 3);
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        g.setAttribute('aMag', new THREE.BufferAttribute(mag, 1));
+        g.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+        deepPoints = new THREE.Points(g, new THREE.ShaderMaterial({
+          uniforms: deepUniforms,
+          vertexShader: STAR_VERT,
+          fragmentShader: STAR_FRAG,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          transparent: true,
+        }));
+        deepPoints.frustumCulled = false;
+        deepPoints.renderOrder = 2;
+        group.add(deepPoints);
+      })
+      .catch((err) => {
+        console.warn('deep star layer unavailable:', err);
+      });
+  }
+  loadDeep();
 
   // --- Constellation lines ---------------------------------------------------
   const lineVerts = [];
@@ -249,6 +312,19 @@ export async function createStarfield(pixelRatio) {
     updateApparentSizes(fovDeg, heightPx) {
       const pxPerRad = heightPx / (2 * Math.tan(fovDeg * Math.PI / 360));
       starUniforms.uZoom.value = THREE.MathUtils.clamp(pxPerRad / 565, 0.85, 4.0);
+      // Aperture gain: magnification implies aperture, and aperture brightens
+      // point sources while extended glow keeps constant surface brightness —
+      // so zooming lifts the faint stars out of the Milky Way texture, which
+      // is physically what a bigger objective does. Ramps from nothing at 14°
+      // to full by 2° (a ~30x field, where any telescope shows mag 10); the
+      // slope is doubled because the intensity law is on a compressed
+      // magnitude curve (10^-0.25m, not the physical 10^-0.4m). Applied to
+      // both star sets, so a mag-7 star never outshines a mag-5 one, and the
+      // clamp in the shader keeps Sirius bounded. Tied to zoom, never to the
+      // Sun: nothing here dims a star.
+      const t = THREE.MathUtils.clamp(
+        Math.log(DEEP_FOV / fovDeg) / Math.log(DEEP_FOV / 2), 0, 1);
+      starUniforms.uMagBias.value = 9.2 * t;
     },
   };
 }

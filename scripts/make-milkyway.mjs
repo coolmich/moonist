@@ -140,32 +140,60 @@ const srcDec = (y) => -90 + ((y + 0.5) / SRC_H) * 180;
 }
 
 // --- subtract the stars the app draws itself -----------------------------------
-{
-  const stars = JSON.parse(readFileSync(
+// Two sets share one pass: the 5,044-star catalogue and the deep layer
+// (Tycho-2 to V 10, built by make-deepstars.mjs — run that first). This
+// texture is the light of everything *fainter* than what the app draws as
+// points, so both sets must come out or each of their stars appears twice —
+// as a sharp point and, magnified, as a fog ball centred on it.
+function loadDrawnStars() {
+  const list = [];
+  const cat = JSON.parse(readFileSync(
     new URL('../public/data/stars.6.json', import.meta.url).pathname, 'utf8',
   ));
+  for (const f of cat.features) {
+    const [lonDeg, latDeg] = f.geometry.coordinates;
+    list.push({ ra: lonDeg < 0 ? lonDeg + 360 : lonDeg, dec: latDeg, mag: f.properties.mag });
+  }
+  const catCount = list.length;
+  const bin = readFileSync(new URL('../public/data/deepstars.bin', import.meta.url).pathname);
+  if (bin.toString('ascii', 0, 4) !== 'MDS1') throw new Error('bad deepstars.bin');
+  const deepCount = bin.readUInt32LE(4);
+  for (let i = 0; i < deepCount; i++) {
+    const o = 8 + i * 10;
+    list.push({
+      ra: bin.readFloatLE(o),
+      dec: bin.readFloatLE(o + 4),
+      mag: bin.readUInt8(o + 8) / 32 + 4.0,
+    });
+  }
+  return { list, catCount, deepCount };
+}
+const drawn = loadDrawnStars();
+{
   const at = (x, y) => (((y * SRC_W + ((x % SRC_W) + SRC_W) % SRC_W)) * NC);
   let removed = 0;
   let brightest = 0;
-  for (const f of stars.features) {
-    const [lonDeg, latDeg] = f.geometry.coordinates;
-    const ra = lonDeg < 0 ? lonDeg + 360 : lonDeg;
-    const mag = f.properties.mag;
+  for (const { ra, dec: latDeg, mag } of drawn.list) {
     const cx = ((180 - ra + 360) % 360) / 360 * SRC_W - 0.5;
     const cy = (latDeg + 90) / 180 * SRC_H - 0.5;
     // Core radius by magnitude: the render's PSF grows with brightness, and a
-    // mag -1 star saturates ~9 texels across where a mag 6 one is barely 3.
-    const r0 = Math.min(11, Math.max(2.5, 2.5 + (6.5 - mag) * 1.0)) * (SRC_W / 8192);
+    // mag -1 star saturates ~9 texels across where a mag 6 one is ~4.
+    const r0 = Math.min(11, Math.max(3.5, 2.5 + (6.5 - mag) * 1.0)) * (SRC_W / 8192);
     const r1 = r0 + 3;
     const r2 = r0 + 9;
+    // Plate carrée stretches a star's image horizontally by 1/cos(dec) — 14x
+    // at Dec 86° — so both the annulus and the subtraction disc must use the
+    // sky metric or a polar star leaves its streak's wings behind (measured:
+    // a 0.94-radiance core survived at Dec -85.6° with a circular disc).
+    const cosDec = Math.max(0.05, Math.cos(latDeg * D));
     // Local background: the median of an annulus, so a neighbouring star or a
     // dust lane edge cannot drag it.
     const ring = [];
     for (let dy = -Math.ceil(r2); dy <= Math.ceil(r2); dy++) {
       const y = Math.round(cy) + dy;
       if (y < 0 || y >= SRC_H) continue;
-      for (let dx = -Math.ceil(r2); dx <= Math.ceil(r2); dx++) {
-        const d = Math.hypot(dx, dy);
+      for (let dx = -Math.ceil(r2 / cosDec); dx <= Math.ceil(r2 / cosDec); dx++) {
+        const d = Math.hypot(dx * cosDec, dy);
         if (d < r1 || d > r2) continue;
         const i = at(Math.round(cx) + dx, y);
         ring.push(0.2126 * src.data[i] + 0.7152 * src.data[i + 1] + 0.0722 * src.data[i + 2]);
@@ -177,8 +205,8 @@ const srcDec = (y) => -90 + ((y + 0.5) / SRC_H) * 180;
     for (let dy = -Math.ceil(r0 + 2); dy <= Math.ceil(r0 + 2); dy++) {
       const y = Math.round(cy) + dy;
       if (y < 0 || y >= SRC_H) continue;
-      for (let dx = -Math.ceil(r0 + 2); dx <= Math.ceil(r0 + 2); dx++) {
-        const d = Math.hypot(dx, dy);
+      for (let dx = -Math.ceil((r0 + 2) / cosDec); dx <= Math.ceil((r0 + 2) / cosDec); dx++) {
+        const d = Math.hypot(dx * cosDec, dy);
         const w = d <= r0 ? 1 : d < r0 + 2 ? (r0 + 2 - d) / 2 : 0;
         if (w <= 0) continue;
         const i = at(Math.round(cx) + dx, y);
@@ -193,8 +221,10 @@ const srcDec = (y) => -90 + ((y + 0.5) / SRC_H) * 180;
       }
     }
     removed++;
+    if (removed % 50000 === 0) console.log(`  ...${removed} stars subtracted`);
   }
-  console.log(`subtracted ${removed} catalogue stars (peak removed radiance ${brightest.toFixed(3)})`);
+  console.log(`subtracted ${removed} drawn stars (${drawn.catCount} catalogue + `
+    + `${drawn.deepCount} deep; peak removed radiance ${brightest.toFixed(3)})`);
 }
 
 // --- resample -----------------------------------------------------------------
@@ -337,6 +367,34 @@ const starChecks = catalogue.features
   });
 const worst = starChecks.reduce((m, s) => Math.max(m, s.bg > 0 ? s.peak / s.bg : 0), 0);
 console.log(`brightest 300 catalogue stars: worst residual peak/background ${worst.toFixed(2)}x`);
+
+// Same residual measurement at the 200 brightest deep-layer stars (the bin is
+// sorted brightest-first), so the tests can prove the deep subtraction too.
+const deepStarChecks = drawn.list.slice(drawn.catCount, drawn.catCount + 200)
+  .map(({ ra, dec, mag }) => {
+    const cx = (((ra + 180) % 360) / 360) * OUT_W - 0.5;
+    const cy = ((90 - dec) / 180) * OUT_H - 0.5;
+    let peak = 0;
+    const ring = [];
+    for (let dy = -18; dy <= 18; dy++) {
+      const Y = Math.round(cy) + dy;
+      if (Y < 0 || Y >= OUT_H) continue;
+      for (let dx = -18; dx <= 18; dx++) {
+        const d = Math.hypot(dx, dy);
+        const v = decLum(Math.round(cx) + dx, Y);
+        if (d <= 5) peak = Math.max(peak, v);
+        else if (d >= 13 && d <= 18) ring.push(v);
+      }
+    }
+    ring.sort((a, b) => a - b);
+    return {
+      mag,
+      peak: Number(peak.toPrecision(4)),
+      bg: Number((ring[ring.length >> 1] ?? 0).toPrecision(4)),
+    };
+  });
+const worstDeep = deepStarChecks.reduce((m, s) => Math.max(m, s.bg > 0 ? s.peak / s.bg : 0), 0);
+console.log(`brightest 200 deep stars: worst residual peak/background ${worstDeep.toFixed(2)}x`);
 writeFileSync(FIXTURE, `${JSON.stringify({
   source: SRC,
   credit: 'NASA/Goddard Space Flight Center Scientific Visualization Studio; Gaia DR2: ESA/Gaia/DPAC',
@@ -351,7 +409,10 @@ writeFileSync(FIXTURE, `${JSON.stringify({
   gridWidth: GRID_W,
   gridHeight: GRID_H,
   grid,
-  // Residual peak vs local background at the 300 brightest catalogue stars.
+  // Residual peak vs local background at the 300 brightest catalogue stars
+  // and the 200 brightest deep-layer (Tycho-2) stars.
   starChecks,
+  deepCount: drawn.deepCount,
+  deepStarChecks,
 }, null, 1)}\n`);
 console.log(`wrote ${FIXTURE}`);

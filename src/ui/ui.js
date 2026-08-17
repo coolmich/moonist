@@ -197,6 +197,7 @@ const CREDITS = [
   ['Solar System Scope', 'Earth day, night and specular maps', 'CC BY 4.0'],
   ['EUMETSAT, via Matt Eason’s Live Cloud Maps', 'the live cloud cover, refreshed every three hours', 'Contains modified EUMETSAT data — maps CC0'],
   ['d3-celestial and the XHIP catalogue', '5,044 stars and the constellation figures', 'BSD 3-Clause — Olaf Frohn'],
+  ['Tycho-2 catalogue, via VizieR', '349,405 more stars to magnitude 10, revealed by zoom', 'ESA Hipparcos mission — Høg et al. 2000'],
   ['NASA SVS Deep Star Maps 2020', 'the Milky Way, rendered from 1.7 billion catalogued stars', 'NASA/Goddard SVS; Gaia DR2: ESA/Gaia/DPAC'],
 ];
 

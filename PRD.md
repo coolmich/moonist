@@ -230,6 +230,42 @@ planet smaller, and the glare only yields to a disc of comparable size.**
   softening width is one pixel expressed in disc radii — using the sprite-space radius instead
   smears it across the whole disc and looks like a phase error.
 
+## The deep-zoom sky: stars are points, glow is glow (2026-08-17)
+
+Reported from dogfooding: at deep zoom the background stars go "very low resolution". Right —
+the Milky Way texture stores integrated light at 2.6 arcmin per texel, so under magnification
+every star living in it bloated into a soft blob, and a 0.2° field holds on average none of
+the 5,044 sharp catalogue stars. The rule that fixes it, the same band-limiting rule the
+terrain follows: never present structure finer than the data carries — and carry the stars in
+data that stays sharp.
+
+- **A deep star layer**: Tycho-2 to V 10 (349,405 stars, 3.5 MB quantized binary built by
+  `scripts/make-deepstars.mjs` from VizieR, Johnson V and B−V via the standard BT/VT
+  transformations). Drawn as point sprites at every field of view — at 65° they are the
+  band's sub-perceptual grain (the airless Moon's naked-eye limit genuinely runs past 6),
+  zoomed in they are the sharp stars the texture could never be. Spot-checked against SIMBAD
+  (five stars, 3 arcsec / 0.3 mag) and swept against the 5,044 so no star is drawn twice
+  (`tests/deepstars.test.mjs`).
+- **The texture now carries only the light fainter than V 10.** All 354k drawn stars are
+  subtracted in `make-milkyway.mjs`; the residual checks in the fixture cover the 200
+  brightest deep stars as well as the 300 brightest catalogue ones. Subtraction must use the
+  sky metric: plate carrée stretches a star's image by 1/cos(dec), and a circular disc left a
+  0.94-radiance streak at Dec −86°. Side effect: with no point sources left to encode, the
+  texture dropped from 5.4 MB to 2.1 MB and nothing clips under the ×3 gain.
+- **Band-limited magnification**: the sky shader never shows a texel wider than ~3 px —
+  beyond that it walks up the mip chain, so the sub-V10 speckle melts into the smooth glow
+  it honestly is instead of posing as bloated stars. Mip filtering conserves the light.
+- **Aperture gain**: magnification implies aperture, and aperture brightens point sources
+  while extended glow keeps constant surface brightness, so zooming lifts the faint stars
+  out of the background — ramping from nothing at 14° FOV to full by 2°. A display
+  convention marked in the shader, tied to zoom alone, never to the Sun; through a telescope
+  here you can watch stars at lunar noon, which is exactly what a real one on the Moon
+  would show.
+- What this looks like: at 3° on the Sagittarius star cloud, ~100 sharp graded points over
+  the real dust-lane structure; at 1.2°, ~50 points over smooth glow; off the band, a clean
+  dark field of points — no fog balls around bright stars (those were the texture's copies
+  of the drawn stars, and are gone with the subtraction). 8.2 ms/frame with the full layer.
+
 ## Known limits
 
 - The star catalogue is J2000 with no proper motion or aberration: the fastest-
@@ -238,14 +274,14 @@ planet smaller, and the glare only yields to a disc of comparable size.**
   ~4.7 km of relief against a true ~4.5 km above the plain, and features between
   roughly 200 m and 500 m fall between the DEM and the procedural cascade.
 - The clock is clamped to 1700–2200, the range where the ephemeris is trustworthy.
-- The Milky Way map is 2.6 arcmin per pixel, so it is sharp at the default field of view and
-  progressively softer as you zoom in; below ~20° FOV it is visibly a smooth glow where a real
-  photograph would resolve more stars. The catalogue's own 5,044 stars stay sharp at any zoom.
-- The map still contains stars fainter than the catalogue's mag-6 limit, down to Gaia depth.
-  Those are the point of it — they are the grain the band is made of — but a texel is 2.6
-  arcmin, so at the 0.2° zoom limit it is magnified some 175x and reads as a smooth glow. The
-  band is smooth at that scale anyway, but nothing there is sharp.
-  The 5,044 stars the app draws itself are subtracted from the map, so nothing is drawn twice.
+- The Milky Way map is 2.6 arcmin per pixel; under magnification the shader deliberately
+  yields to the smooth glow (see the deep-zoom section above), so below a few degrees of
+  field the background between the drawn stars carries no structure finer than ~10 arcmin.
+  That is the data's edge, not a bug.
+- The drawn stars end at V 10 (Tycho-2's completeness limit is near there). A real telescope
+  at the 0.2° floor would show thousands more to mag 13–14; here everything fainter is the
+  texture's smooth glow. Every star to V 10 is subtracted from the map, so nothing is drawn
+  twice.
 
 ## Checkpoints
 
@@ -279,3 +315,7 @@ planet smaller, and the glare only yields to a disc of comparable size.**
   surface brightness from albedo/d², zoom floor 0.2°. Size law pinned by
   `tests/planet-sizes.test.mjs`; on-screen sizes verified monotone by
   screenshot measurement. 34 tests green.
+- 2026-08-17 (later): deep-zoom sky rebuilt after the "background stars go low
+  resolution" report — Tycho-2 layer to V 10 (SIMBAD-checked), all drawn stars
+  subtracted from the texture in the sky metric, band-limited magnification,
+  aperture gain. Texture 5.4 → 2.1 MB; 8.2 ms/frame; 38 tests green.

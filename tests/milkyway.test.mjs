@@ -76,6 +76,22 @@ test('the stars the app draws itself have been subtracted from the map', () => {
   assert.ok(median < 1.5, `median residual is ${median.toFixed(2)}x the local background`);
 });
 
+test('the deep star layer has been subtracted from the map too', () => {
+  // The zoom draws Tycho-2 to V 10 as points; left in the map, each of those
+  // stars magnifies into a fog ball centred on its own sharp point. Bounds are
+  // looser than the catalogue's: these sit in crowded fields where the
+  // measurement window can legitimately catch a fainter-than-V10 neighbour.
+  assert.ok(fixture.deepStarChecks.length >= 200, 'fixture lost its deep checks');
+  const worstPeak = fixture.deepStarChecks.reduce((m, s) => Math.max(m, s.peak), 0);
+  assert.ok(worstPeak < 0.25, `brightest residual deep-star core is ${worstPeak} linear`);
+  const ratios = fixture.deepStarChecks
+    .filter((s) => s.bg > 0)
+    .map((s) => s.peak / s.bg)
+    .sort((a, b) => a - b);
+  const median = ratios[ratios.length >> 1];
+  assert.ok(median < 1.8, `median deep residual is ${median.toFixed(2)}x the local background`);
+});
+
 test('the band lies on the galactic equator', () => {
   const near = [];
   const far = [];

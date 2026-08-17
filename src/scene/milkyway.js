@@ -65,7 +65,21 @@ const FRAG = /* glsl */ `
     vec2 dUVdx = vec2((n.x * dndx.y - n.y * dndx.x) * k, dndx.z * p);
     vec2 dUVdy = vec2((n.x * dndy.y - n.y * dndy.x) * k, dndy.z * p);
 
-    vec3 radiance = textureGrad(uMap, uv, dUVdx, dUVdy).rgb * uIntensity;
+    // Band-limit under magnification — the terrain rule, applied to the sky:
+    // never present structure finer than the data carries. A texel is 2.6
+    // arcmin of integrated light; once it would span more than ~3 screen px,
+    // its faint-star speckle stops reading as grain and starts reading as
+    // bloated blobs. So past that point, walk up the mip chain to hold the
+    // displayed granularity at ~3 px: the speckle melts into the smooth glow
+    // it honestly is (the resolved stars on top come from the catalogue), and
+    // large-scale band structure survives as long as it is real. Mip box
+    // filtering conserves the light, it only stops pretending to place it.
+    float fpTexels = max(length(dUVdx * vec2(8192.0, 4096.0)),
+                         length(dUVdy * vec2(8192.0, 4096.0)));
+    float lod = clamp(log2(1.0 / (3.0 * max(fpTexels, 1e-7))), 0.0, 4.0);
+    vec3 radiance = (lod > 0.001
+      ? textureLod(uMap, uv, lod).rgb
+      : textureGrad(uMap, uv, dUVdx, dUVdy).rgb) * uIntensity;
     gl_FragColor = vec4(radiance, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>

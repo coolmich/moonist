@@ -82,21 +82,28 @@ Way, `C` constellations, `N` star names, `E` snap to the Earth.
   straight from the ephemeris. Clouds are fetched live and refreshed every three hours, with a
   bundled fallback if the network is unavailable.
 - **Stars** — 5,044 stars to magnitude 6 with B−V colour, drawn with a magnitude-driven size
-  law and diffraction spikes above first magnitude. Labels live in a screen-space canvas layer
-  with priority-based collision resolution, so they never overlap, never get clipped at the
-  frame edge, and never float in front of a mountain.
+  law and diffraction spikes above first magnitude, plus a deep layer of 349,405 Tycho-2
+  stars to magnitude 10 that zooming in lifts out of the background — magnification implies
+  aperture, and aperture brightens point sources while extended glow keeps constant surface
+  brightness. A star is a sharp point at every zoom; only the glow between them is texture.
+  Labels live in a screen-space canvas layer with priority-based collision resolution, so
+  they never overlap, never get clipped at the frame edge, and never float in front of a
+  mountain.
 - **Planets** — the five naked-eye planets carry their true angular sizes, phases and spin
   axes from the ephemeris: zoom in and Venus is a crescent, Jupiter shows its belts, and
   Saturn its rings at the real opening angle for the date, checked against JPL Horizons.
   Wide out they are the capped brilliant points a camera would record.
-- **The Milky Way** — everything fainter than those 5,044 stars, which is what the band
-  actually is. The map is NASA's Deep Star Maps 2020: not a photograph and not a mosaic, but a
-  render of 1.7 billion catalogued stars from Hipparcos-2, Tycho-2 and Gaia DR2, so the star
-  clouds and the dust lanes are where the catalogue puts them rather than where an artist did.
-  `scripts/make-milkyway.mjs` resamples it into the sky convention used here, subtracts the
-  5,044 stars the app draws itself so nothing appears twice, and keeps its linear radiometry,
-  so it rides the same exposure curve as the stars: washed out at lunar noon, vivid through
-  the two-week night.
+- **The Milky Way** — everything fainter than the stars drawn as points, which is what the
+  band actually is. The map is NASA's Deep Star Maps 2020: not a photograph and not a mosaic,
+  but a render of 1.7 billion catalogued stars from Hipparcos-2, Tycho-2 and Gaia DR2, so the
+  star clouds and the dust lanes are where the catalogue puts them rather than where an
+  artist did. `scripts/make-milkyway.mjs` resamples it into the sky convention used here,
+  subtracts every star the app draws itself — the 5,044 and the deep layer both — so nothing
+  appears twice, and keeps its linear radiometry, so it rides the same exposure curve as the
+  stars: washed out at lunar noon, vivid through the two-week night. Under magnification the
+  shader never shows a texel wider than a few pixels — past its 2.6-arcmin resolution the
+  texture yields to the smooth glow it honestly is, and the sharp stars on top come from the
+  catalogues.
 
 ## Verification
 
@@ -121,5 +128,7 @@ Earth-from-Moon calculation and agrees to 0.003°.
   Maps (CC0).
 - Star and constellation data: **d3-celestial** by Olaf Frohn — BSD 3-Clause, built on the XHIP
   extended Hipparcos compilation.
+- Deep star layer: **Tycho-2 catalogue** (Høg et al. 2000, ESA Hipparcos mission), via CDS
+  VizieR (I/259).
 - Milky Way: **Deep Star Maps 2020**, NASA/Goddard Space Flight Center Scientific Visualization
   Studio (Ernie Wright). Gaia DR2: **ESA/Gaia/DPAC**.

@@ -1,0 +1,40 @@
+{
+  "source": "Tycho-2 (Hog et al. 2000), VizieR I/259 via TAP; Johnson V and B-V from the standard BT/VT transformations; stars in the app's 5,044-star catalogue removed by HIP id plus a 10-arcsec positional sweep below V 6.5.",
+  "query": "SELECT RAmdeg, DEmdeg, BTmag, VTmag, HIP FROM \"I/259/tyc2\" WHERE VTmag < 10.5 AND RAmdeg IS NOT NULL",
+  "vMax": 10,
+  "count": 349405,
+  "sha256": "b7cf06c695d4be5afd236d2e3c1c83972e7656fa606cdb6aa534b5bc4eb399f0",
+  "simbadChecks": [
+    {
+      "id": "HD 189733",
+      "raDeg": 300.18213726402,
+      "decDeg": 22.71085365096,
+      "V": 7.648
+    },
+    {
+      "id": "HD 209458",
+      "raDeg": 330.79488644388,
+      "decDeg": 18.88431927594,
+      "V": 7.63
+    },
+    {
+      "id": "HD 80606",
+      "raDeg": 140.65657001363,
+      "decDeg": 50.60373203519,
+      "V": 9.0
+    },
+    {
+      "id": "HD 149026",
+      "raDeg": 247.62341073817,
+      "decDeg": 38.34730805024,
+      "V": 8.14
+    },
+    {
+      "id": "HD 15082",
+      "raDeg": 36.71274275754,
+      "decDeg": 37.55048235612,
+      "V": 8.14
+    }
+  ],
+  "simbadFetchedOn": "2026-08-17"
+}
