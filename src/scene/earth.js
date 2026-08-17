@@ -239,8 +239,10 @@ const FRAG = /* glsl */ `
       float aa = max(fwidth(ang) * 1.2, uHomeMark * 0.16);
       float ring = 1.0 - smoothstep(aa, aa * 2.0, abs(ang - uHomeMark));
       float core = 1.0 - smoothstep(0.0, uHomeMark * 0.4, ang);
-      float m = clamp(ring + core * 0.85, 0.0, 1.0);
-      color = mix(color, vec3(0.62, 0.80, 1.05) * max(uBrightness, 0.35), m);
+      float m = clamp(ring + core * 0.7, 0.0, 1.0);
+      // Kept decisively blue: pushed to white by the tone curve it read as
+      // cloud or snow, which is the confusion the marker exists to cut.
+      color = mix(color, vec3(0.30, 0.58, 1.15) * max(uBrightness, 0.35), m);
     }
 
     gl_FragColor = vec4(color, 1.0);
@@ -506,11 +508,14 @@ export async function createEarth(renderer) {
       uniforms.uSunPosBody.value.set(...e.sunPosBody);
       uniforms.uMoonPosBody.value.set(...e.moonPosBody);
 
-      // Home marker: hold the ring at ~7 screen px whatever the zoom, with a
-      // floor so deep zooms shrink it to the metro area rather than a point.
+      // Home marker: hold the ring at ~7 screen px, but never let it claim
+      // more than ~28% of the drawn disc's radius — at ×1 a fixed pixel size
+      // would cover half the planet, and a marker that covers stops marking.
+      // The 0.02 rad floor (~127 km) keeps deep zooms ringing the metro area.
       if (homeVec) {
+        const rPx = Math.min(7, 0.14 * lastDiscPx);
         uniforms.uHomeMark.value =
-          Math.min(0.5, Math.max(0.02, Math.asin(Math.min(1, 14 / Math.max(lastDiscPx, 8)))));
+          Math.max(0.02, Math.asin(Math.min(1, 2 * rPx / Math.max(lastDiscPx, 8))));
       }
 
       // Take the projection's radial stretch back out of the magnified disc.

@@ -551,6 +551,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   homeBtn.type = 'button';
   homeBtn.title = 'Mark where you are on the Earth. Asks the browser for your location once.';
   homeBtn.setAttribute('aria-pressed', 'false');
+  let homeAsking = false;
   homeBtn.addEventListener('click', () => {
     if (view.homeOn) {
       view.setHomeOn(false);
@@ -558,14 +559,24 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
       view.setHomeOn(true);
     } else if (!navigator.geolocation) {
       api.showError('This browser cannot report your location.');
-    } else {
+    } else if (!homeAsking) {
+      // The permission prompt can take seconds; silence reads as a dead
+      // button, so say what is happening and refuse double requests.
+      homeAsking = true;
+      osd('Asking the browser for your location…', 8000);
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          homeAsking = false;
           view.setHome(pos.coords.latitude, pos.coords.longitude);
           view.setHomeOn(true);
+          osd('Home marked on the Earth', 1600);
         },
-        () => api.showError('Could not get your location — allow location access for this site and try again.'),
-        { timeout: 10000, maximumAge: 3600e3 },
+        () => {
+          homeAsking = false;
+          osdEl.classList.remove('show');
+          api.showError('Could not get your location — allow location access for this site and try again.');
+        },
+        { timeout: 8000, maximumAge: 3600e3 },
       );
     }
   });
@@ -789,10 +800,12 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   const cards = SITES.map((s) => {
     const c = el('button', 'card', picker.sheet);
     c.type = 'button';
+    // Pins hug just inside the limb (×0.95, ~1 px at this size) so a limb
+    // site's dot sits on the disc instead of overhanging the card background.
     const pin = moonPinXY(s.lat, s.lon);
     c.innerHTML =
       `<span class="moonprev"><img src="/textures/moonface.webp" alt="">` +
-      `<i class="pin" style="left:${(50 + pin.x * 50).toFixed(1)}%;top:${(50 - pin.y * 50).toFixed(1)}%"></i></span>` +
+      `<i class="pin" style="left:${(50 + pin.x * 47.5).toFixed(1)}%;top:${(50 - pin.y * 47.5).toFixed(1)}%"></i></span>` +
       `<span class="name">${s.name}</span>` +
       `<span class="earth" data-earth="${s.id}">—<small>Earth</small></span>` +
       `<span class="blurb">${s.blurb}</span>`;
@@ -1047,10 +1060,17 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
         const sep = gcSepDeg(state.subLunar.lat, state.subLunar.lon, view.home.lat, view.home.lon);
         if (sep < 85) R.home.textContent = 'facing the Moon';
         else if (sep < 91) R.home.textContent = 'on the limb, foreshortened';
-        else if (clock.speed > 3600) R.home.textContent = 'behind the Earth';
-        else {
-          if (now - lastHome > 60000) {
+        else if (clock.speed !== 1) {
+          // At any accelerated speed a cached "~N h" is stale within seconds
+          // — a number this UI cannot keep honest is a number it must not
+          // print. The state word alone stays true at every speed.
+          R.home.textContent = 'behind the Earth';
+        } else {
+          // Real time: refresh the countdown once a minute, and immediately
+          // after any date jump large enough to move it.
+          if (now - lastHome > 60000 || Math.abs(d.getTime() - homeSimMs) > 30 * 60e3) {
             lastHome = now;
+            homeSimMs = d.getTime();
             homeHours = view.homeReturnHours();
           }
           R.home.textContent = homeHours
@@ -1169,6 +1189,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   let lastCards = 0;
   let lastHome = 0;
   let homeHours = null;
+  let homeSimMs = 0;
   let lastMag = view.earthScale;
   let atLimitWarned = false;
   syncCards();

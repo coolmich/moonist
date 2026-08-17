@@ -289,6 +289,11 @@ const lighting = createLighting(scene, renderer);
 // its own terrain is swapped in.
 let siteGen = 0;
 async function setSite(next) {
+  // window.moonist is the documented automation surface, so accept a site id
+  // as well as the site object — and refuse anything else cleanly instead of
+  // fetching /terrain/undefined.bin.
+  if (typeof next === 'string') next = SITES.find((s) => s.id === next);
+  if (!next || !SITES.some((s) => s.id === next.id)) return false;
   const gen = ++siteGen;
   const built = await createTerrain(next);
   if (gen !== siteGen) {
