@@ -39,16 +39,6 @@ const STYLE = /* css */ `
   .status-line:focus-visible {
     outline: 2px solid rgba(150, 190, 240, 0.85); outline-offset: 1px;
   }
-  /* A 26px-tall control is fine under a cursor and hostile under a thumb —
-     and the dismissal controls (modal close, "Got it") are the ones a phone
-     user hits first. */
-  @media (pointer: coarse) {
-    .btn { padding: 11px 12px; }
-    .sheet .close { width: 34px; height: 34px; }
-    #ui-hint .dismiss { padding: 8px 10px; }
-    .chip { padding: 10px 12px; }
-    input.mag { height: 34px; }
-  }
   .panel { box-sizing: border-box; }
 
   /* ---- status capsule + details drawer, top left ---- */
@@ -324,6 +314,21 @@ const STYLE = /* css */ `
     padding: 9px 14px; font-size: 12px; color: #f0d9d1;
     border-color: rgba(220, 150, 120, 0.35);
     display: none;
+  }
+
+  /* ---- touch overrides ---- */
+  /* A 26px-tall control is fine under a cursor and hostile under a thumb —
+     and the dismissal controls (modal close, "Got it") are the ones a phone
+     user hits first. This block must stay LAST in the stylesheet: every rule
+     here ties its base declaration on specificity and wins only on source
+     order (an @media wrapper adds no specificity). */
+  @media (pointer: coarse) {
+    .btn { padding: 11px 12px; }
+    #ui-dock .clock-btn { padding: 10px 11px; } /* border included: 34px like .btn */
+    .sheet .close { width: 34px; height: 34px; }
+    #ui-hint .dismiss { padding: 8px 10px; }
+    .chip { padding: 12px; }
+    input.mag { height: 34px; }
   }
 `;
 
