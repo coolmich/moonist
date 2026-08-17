@@ -583,6 +583,12 @@ function renderFrame() {
     earth.setScale(earthScale);
     earth.update(state);
     earth.setBrightness(earthBrightness);
+    const fPx = heightPx / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
+    const theta = THREE.MathUtils.degToRad(state.earth.angRadiusDeg * earthScale);
+    // How wide the disc is actually being drawn: past half the cloud map's
+    // width, the texels are what the eye is looking at and the finer map
+    // earns its download.
+    earth.requestDetail(2 * fPx * Math.tan(theta));
     // Label the hero object whenever it is actually in view. (It is its own
     // occluder, so test the skyline directly rather than via aboveSkyline.)
     const eh = Math.hypot(state.earth.sceneDir[0], state.earth.sceneDir[2]);
@@ -596,11 +602,9 @@ function renderFrame() {
       const cosPhi = Math.sin(look.az) * Math.cos(look.alt) * ed[0]
         + Math.sin(look.alt) * ed[1]
         - Math.cos(look.az) * Math.cos(look.alt) * ed[2];
-      const theta = THREE.MathUtils.degToRad(state.earth.angRadiusDeg * earthScale);
       // Clamp so tan stays sane when the disc is far off-axis (the label is
       // culled off screen there anyway).
       const phi = Math.min(Math.acos(THREE.MathUtils.clamp(cosPhi, -1, 1)), 1.35 - theta);
-      const fPx = heightPx / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
       labelItems.push({
         id: 'earth',
         dir: state.earth.sceneDir,

@@ -18,7 +18,7 @@ A realistic simulator of standing on the near side of the Moon and looking at th
 - **Ephemeris**: astronomy-engine v2.1.19 (MIT, ±1 arcmin). Moon orientation via `RotationAxis` (IAU WGCCRE Mean-Earth frame, full E1..E13 series — verified in source). Earth orientation via GAST + `Rotation_EQD_EQJ` (the IAU cartographic Earth model was measured 0.65° off in spin — do not use it).
 - **Ground truth**: JPL Horizons test vectors (observer on lunar surface, `CENTER='coord@301'`) in `tests/fixtures/horizons.json`; `npm test` must stay green within 0.15° of Horizons.
 - **Frames**: scene = local horizon frame, +X East, +Y Up, +Z South; azimuth N=0/E=90 (Horizons convention). Selenographic coords are Mean-Earth frame, east-positive — same as Horizons and LROC.
-- **Live clouds**: `https://clouds.matteason.co.uk/images/4096x2048/clouds-alpha.png` (CORS `*` verified; EUMETSAT-derived; updates every 3 h; CC0 with required line "Contains modified EUMETSAT data"). Bundled fallback at `public/textures/clouds-fallback.png`.
+- **Live clouds**: `https://clouds.matteason.co.uk/images/{4096x2048,8192x4096}/clouds-alpha.png` (CORS `*` verified; EUMETSAT-derived; updates every 3 h; CC0 with required line "Contains modified EUMETSAT data"). The 4k (7 MB) loads always; the 8k (24 MB) is fetched only once the disc is drawn wider than half the 4k map, past which the texels are what the eye is looking at. Bundled fallback at `public/textures/clouds-fallback.png`.
 - **Earth textures**: Solar System Scope 8K day/night + 2K specular (CC BY 4.0), landmark-verified equirectangular, 180°W at left edge.
 - **Milky Way**: NASA SVS *Deep Star Maps 2020* (`starmap_2020_8k.exr`, svs.gsfc.nasa.gov/4851)
   — a render of 1.7 billion catalogued stars (Hipparcos-2 < mag 8, Tycho-2 to 11.5, Gaia DR2
@@ -57,6 +57,9 @@ A realistic simulator of standing on the near side of the Moon and looking at th
 - **Radiometry**: terrain vertex colour is the site's real albedo scaled once (×2.2); the Earth
   is lit at the same intensity constant as the directional sunlight, so ocean/desert/cloud
   contrast comes out physically rather than by hand-tuning. Opposition surge peaks at ~1.4×.
+  The cloud layer is anchored the same way: coverage and reflectance are chosen so the whole
+  planet reflects 0.306 of the light falling on it — the Earth's measured Bond albedo — which
+  is what keeps the disc off the shoulder of the tone curve where contrast dies.
 - **Exposure** ramps from 0.9 in daylight to 3–10 at night depending on earthshine. Sky objects
   divide by exposure so they hold constant apparent brightness; the 2D label layer composites
   outside tone mapping and therefore must NOT be exposure-compensated (this was a real bug).
@@ -402,3 +405,25 @@ earth", configurable by dragging, without breaking the physics.
   regression pinned above. Typing an hour that DST skips (02:30 on a
   spring-forward day) resolves forward to 03:30 and the field echoes back what
   it actually used — accepted, and the honest answer.
+- 2026-08-17 (cloud clarity): user reported the cloud map as low-contrast and
+  low-detail against zoom.earth. It was not the source — the shipped map's own
+  filaments and stratocumulus cells are crisp (sd 75 of 255 over the tropical
+  Atlantic); the renderer was throwing them away. **Cloud was painted as a
+  perfect white reflector at coverage = the stored value**, which made the
+  planet return 0.601 of the light falling on it, 1.96× the Earth's measured
+  Bond albedo of 0.306. That excess put the whole disc in the shoulder of the
+  ACES curve, where its slope is ~0.13 against ~0.89 in the midtones — the
+  map's structure arrived at the screen compressed ~7×, as a milky sheet with
+  the ocean painted over at 92% opacity. Fix: the one stored number is split
+  into coverage `0.92·v^1.5` and reflectance `0.25 + 0.342·v`, the pair solved
+  so the planet lands on 0.306 exactly. Thin cirrus and a convective tower now
+  differ in brightness, not only in opacity. Measured in the renderer at ×10:
+  disc sd 26.6 → 37.3 (+40%), p5–p95 range 85 → 120 levels, nothing clipped.
+  The exponent 1.5 is the free parameter in the split (1.0 and 2.0 both also
+  hit 0.306, at sd 31 and 46); it was chosen by eye against the source, and
+  the reflectance is solved from whatever it is set to, so the total reflected
+  light stays right. Also: anisotropy 8 → 16 for the oblique limb, and the 8k
+  cloud map on demand (verified real detail, not an upscale: box-downsampling
+  it reproduces the 4k to 3.5 levels while its gradient energy is 0.79× the
+  4k's, not the 0.5× interpolation gives). Earthshine is unaffected — it comes
+  from `illumFraction` in the astro core, never from the render.

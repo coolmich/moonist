@@ -11,9 +11,18 @@ import { mulMV, transpose } from '../astro/vec.js';
 // EUMETSAT-derived maps (CORS *, updates every 3 h), bundled fallback.
 
 const EARTH_DIST = 200000; // scene units; well inside the star dome
-const LIVE_CLOUDS_URL = 'https://clouds.matteason.co.uk/images/4096x2048/clouds-alpha.png';
+const liveCloudsUrl = (w) => `https://clouds.matteason.co.uk/images/${w}x${w / 2}/clouds-alpha.png`;
 const FALLBACK_CLOUDS_URL = '/textures/clouds-fallback.png';
 const CLOUD_REFRESH_MS = 3 * 3600 * 1000;
+// The source publishes the same map at 4096 and 8192 wide. The 8k is real
+// extra detail, not an upscale — box-downsampling it reproduces the 4k to a
+// mean of 3.5 levels, while its own gradient energy is 0.79x the 4k's rather
+// than the 0.5x a pure interpolation would give — but it costs 24 MB against
+// 7. An equirect map is oversampled until the disc is drawn wider than half
+// the texture, so the 4k is already more than the screen can show until the
+// view is zoomed well in; the 8k is fetched at that point and not before.
+const CLOUD_W_BASE = 4096;
+const CLOUD_W_DEEP = 8192;
 
 const VERT = /* glsl */ `
   varying vec3 vObjDir;
@@ -58,15 +67,37 @@ const FRAG = /* glsl */ `
 
     vec3 day = textureGrad(uDay, uv, dUVdx, dUVdy).rgb;
     vec3 nightLights = textureGrad(uNight, uv, dUVdx, dUVdy).rgb;
-    float cloud = textureGrad(uClouds, uv, dUVdx, dUVdy).a;
+    float cloudRaw = textureGrad(uClouds, uv, dUVdx, dUVdy).a;
     float water = textureGrad(uSpec, uv, dUVdx, dUVdy).r;
+
+    // The cloud map carries one number per texel — satellite-measured
+    // brightness, which conflates how much sky the cloud covers with how
+    // brightly it reflects. Splitting that number into the two is a display
+    // choice, but not a free one: the pair is pinned by a measured constant.
+    //
+    // Painting cloud as a perfect white reflector (albedo 1.0, what this did)
+    // made the planet return 0.601 of the light falling on it — 1.96x the
+    // Earth's measured Bond albedo of 0.306 — and that excess is precisely
+    // what washed the disc out. Everything landed in the shoulder of the ACES
+    // curve, where its slope is ~0.13 against ~0.89 in the midtones, so the
+    // map's structure was compressed 7x on the way to the screen: a milky
+    // sheet with the ocean painted over at 92% opacity.
+    //
+    // Coverage v^1.5 with reflectance rising 0.25 -> 0.59 across the same
+    // range puts the planet back on 0.306 exactly, and gives thin cirrus and
+    // a convective tower the different brightnesses they have in life. The
+    // exponent is the free parameter in that split; 1.5 was chosen by eye
+    // against the source imagery, with the reflectance solved from it so the
+    // total reflected light stays right whatever the exponent.
+    float cover = 0.92 * pow(cloudRaw, 1.5);
+    float cloudAlb = 0.25 + 0.342 * cloudRaw;
 
     // Sunlit side: surface albedo under clouds, lit at the same intensity the
     // Sun lights the regolith (both textures are sRGB-decoded to linear, so
     // the ocean really is ~0.01 and deserts ~0.5 — that contrast is the point).
     vec3 dayLit = day * diffuse;
-    vec3 cloudLit = vec3(1.0, 0.99, 0.97) * diffuse;
-    dayLit = mix(dayLit, cloudLit, cloud * 0.92);
+    vec3 cloudLit = vec3(1.0, 0.99, 0.97) * cloudAlb * diffuse;
+    dayLit = mix(dayLit, cloudLit, cover);
 
     // Ocean sun glint where it is not overcast. The viewer is not at infinity
     // once the mesh is magnified (x10 puts it ~6 radii out), so use the true
@@ -74,11 +105,11 @@ const FRAG = /* glsl */ `
     vec3 refl = reflect(-uSunDirBody, n);
     vec3 toView = normalize(uViewDirBody * uViewDistBody - n);
     float glint = pow(max(dot(refl, toView), 0.0), 140.0);
-    dayLit += vec3(1.0, 0.95, 0.85) * glint * water * (1.0 - cloud) * 0.5;
+    dayLit += vec3(1.0, 0.95, 0.85) * glint * water * (1.0 - cover) * 0.5;
 
     // Night side: city lights, dimmed under cloud cover.
-    vec3 nightSide = nightLights * vec3(1.0, 0.86, 0.66) * 0.85 * (1.0 - cloud * 0.85);
-    nightSide += vec3(0.55, 0.65, 0.85) * cloud * 0.004; // hint of moonlit cloud
+    vec3 nightSide = nightLights * vec3(1.0, 0.86, 0.66) * 0.85 * (1.0 - cover * 0.85);
+    nightSide += vec3(0.55, 0.65, 0.85) * cover * 0.004; // hint of moonlit cloud
 
     vec3 color = mix(nightSide, dayLit, dayT) * uBrightness;
     gl_FragColor = vec4(color, 1.0);
@@ -151,7 +182,9 @@ export async function createEarth(renderer) {
     loadTexture(loader, '/textures/earth-specular.png', { srgb: false }),
   ]);
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
-  for (const t of [day, night, spec]) t.anisotropy = Math.min(8, maxAniso);
+  // The equirect is stretched hardest exactly where the sight line is most
+  // oblique — the limb — so take all the anisotropy the GPU offers.
+  for (const t of [day, night, spec]) t.anisotropy = Math.min(16, maxAniso);
 
   // Cloudless placeholder until the live map arrives, so nothing blocks the
   // first frame on a 7 MB download.
@@ -206,10 +239,12 @@ export async function createEarth(renderer) {
   let nextCloudFetch = 0;
   let usingFallback = false;
   let cloudFetchInFlight = false;
+  let cloudWidth = CLOUD_W_BASE;   // what the view has asked for
+  let loadedWidth = 0;             // what is actually on the GPU
 
   function setClouds(tex, kind) {
     const old = uniforms.uClouds.value;
-    tex.anisotropy = Math.min(8, maxAniso);
+    tex.anisotropy = Math.min(16, maxAniso);
     uniforms.uClouds.value = tex;
     cloudStatus = { kind, fetchedAt: new Date() };
     if (old && old !== tex) old.dispose();
@@ -218,9 +253,13 @@ export async function createEarth(renderer) {
   async function refreshClouds() {
     if (cloudFetchInFlight) return;
     cloudFetchInFlight = true;
+    const want = cloudWidth;
+    let loaded = false;
     try {
-      const live = await loadTexture(loader, `${LIVE_CLOUDS_URL}?t=${Date.now()}`, { srgb: false });
+      const live = await loadTexture(loader, `${liveCloudsUrl(want)}?t=${Date.now()}`, { srgb: false });
       setClouds(live, 'live');
+      loadedWidth = want;
+      loaded = true;
       usingFallback = false;
       nextCloudFetch = Date.now() + CLOUD_REFRESH_MS;
     } catch {
@@ -238,6 +277,9 @@ export async function createEarth(renderer) {
     } finally {
       cloudFetchInFlight = false;
     }
+    // A zoom can raise the target while a fetch is already in the air. Only
+    // chase it after a load that worked, or a dead network would spin here.
+    if (loaded && loadedWidth < cloudWidth) refreshClouds();
   }
   refreshClouds();
 
@@ -248,6 +290,16 @@ export async function createEarth(renderer) {
     group,
     get cloudStatus() {
       return cloudStatus;
+    },
+    /**
+     * How wide the disc is being drawn, in css px. Past half the cloud map's
+     * width the texels are what the eye is looking at, and only then is the
+     * bigger map worth its download.
+     */
+    requestDetail(discPx) {
+      if (cloudWidth >= CLOUD_W_DEEP || discPx <= cloudWidth / 2) return;
+      cloudWidth = CLOUD_W_DEEP;
+      if (!cloudFetchInFlight) refreshClouds();
     },
     update(state) {
       if (Date.now() > nextCloudFetch) {
