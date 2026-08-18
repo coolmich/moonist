@@ -64,7 +64,8 @@ Earth all fit in a single frame.
 
 ## Controls
 
-Drag to look around, wheel to zoom (0.2°–100° field of view — far enough in for Venus to
+Drag to look around, wheel to zoom — the zoom holds the point under your cursor, like a
+map (0.2°–100° field of view — far enough in for Venus to
 show its crescent, Jupiter its belts, and Saturn its rings, tilted as they really are on
 today's date). One bar along the bottom holds everything: the site picker, the time controls — Real,
 `1s = 1h` (watch the Earth turn), `1s = 1d` (the lunar day and the phases) — the clock

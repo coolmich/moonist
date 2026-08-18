@@ -93,9 +93,51 @@ function pixelAngles(clientX, clientY) {
   };
 }
 
+// Cursor-anchored zoom: the sky point under the mouse holds its screen
+// position through the whole eased FOV change, the way a map zooms. Cleared
+// by anything else that aims the view (drag, lookAt, keyboard), which
+// returns the wheel to plain centre-zoom.
+let zoomAnchor = null;
+
+// Scene-frame unit direction through a client pixel at the current look.
+function rayDir(clientX, clientY) {
+  const el = renderer.domElement;
+  const f = el.clientHeight / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
+  const a = (clientX - el.clientWidth / 2) / f;
+  const b = (el.clientHeight / 2 - clientY) / f;
+  const ca = Math.cos(look.az), sa = Math.sin(look.az);
+  const cl = Math.cos(look.alt), sl = Math.sin(look.alt);
+  // right (ca,0,sa), up (-sa*sl,cl,ca*sl), forward (sa*cl,sl,-ca*cl)
+  const x = a * ca - b * sa * sl + sa * cl;
+  const y = b * cl + sl;
+  const z = a * sa + b * ca * sl - ca * cl;
+  const n = Math.hypot(x, y, z);
+  return { x: x / n, y: y / n, z: z / n };
+}
+
+// Re-aim so world direction D sits exactly under the given pixel at the
+// CURRENT fov. Closed form: the camera-ray's vertical component is az-free,
+// so alt solves first from D.y, then az from the horizontal pair.
+function aimThrough(clientX, clientY, D) {
+  const el = renderer.domElement;
+  const f = el.clientHeight / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
+  const ax = (clientX - el.clientWidth / 2) / f;
+  const ay = (el.clientHeight / 2 - clientY) / f;
+  const n = Math.hypot(ax, ay, 1);
+  const cra = ax / n, crb = ay / n, crf = 1 / n;
+  const alt = Math.asin(THREE.MathUtils.clamp(D.y / Math.hypot(crb, crf), -1, 1))
+    - Math.atan2(crb, crf);
+  const h = crf * Math.cos(alt) - crb * Math.sin(alt);
+  const az = Math.atan2(D.x, -D.z) - Math.atan2(cra, h);
+  // shortest way from where the camera already points, so az stays continuous
+  look.az += Math.atan2(Math.sin(az - look.az), Math.cos(az - look.az));
+  look.alt = THREE.MathUtils.clamp(alt, ALT_MIN, ALT_MAX);
+}
+
 const canvas = renderer.domElement;
 
 canvas.addEventListener('pointerdown', (e) => {
+  zoomAnchor = null; // the drag owns the view now
   look.dragging = true;
   look.vAz = 0;
   look.vAlt = 0;
@@ -157,6 +199,7 @@ canvas.addEventListener('pointercancel', endDrag);
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
+  zoomAnchor = { x: e.clientX, y: e.clientY };
   look.fovTarget = THREE.MathUtils.clamp(
     look.fovTarget * Math.exp(e.deltaY * 0.0012),
     FOV_MIN,
@@ -378,6 +421,7 @@ const view = {
   /** Aim the camera. `smooth` slews over ~0.5 s instead of cutting. */
   lookAt(azDeg, altDeg, fovDeg, smooth = false) {
     if (!Number.isFinite(azDeg) || !Number.isFinite(altDeg)) return;
+    zoomAnchor = null;
     // Keep the accumulated drag angle bounded, or the shortest-way modulo
     // below misbehaves after a few full turns of dragging.
     look.az = ((look.az % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
@@ -572,15 +616,22 @@ function renderFrame() {
     if (keysDown.has('Minus') || keysDown.has('NumpadSubtract')) {
       look.fovTarget = THREE.MathUtils.clamp(look.fovTarget * Math.exp(1.6 * dt), FOV_MIN, FOV_MAX);
     }
-    if (keysDown.size) slew = null;
+    if (keysDown.size) { slew = null; zoomAnchor = null; }
   }
 
-  // Eased FOV zoom (snap when close so it settles quickly).
+  // Eased FOV zoom (snap when close so it settles quickly). With a wheel
+  // anchor, the direction under the cursor is captured before the step and
+  // the camera re-aimed after it, every frame of the ease — the grabbed sky
+  // point never slides.
   const fovDelta = look.fovTarget - look.fov;
-  if (Math.abs(fovDelta) > 0.05) {
-    look.fov += fovDelta * (1 - Math.exp(-dt / 0.11));
-  } else {
-    look.fov = look.fovTarget;
+  if (fovDelta !== 0) {
+    const D = zoomAnchor && !look.dragging ? rayDir(zoomAnchor.x, zoomAnchor.y) : null;
+    if (Math.abs(fovDelta) > 0.05) {
+      look.fov += fovDelta * (1 - Math.exp(-dt / 0.11));
+    } else {
+      look.fov = look.fovTarget;
+    }
+    if (D) aimThrough(zoomAnchor.x, zoomAnchor.y, D);
   }
   applyLook(); // camera matrices must be current before label projection
 

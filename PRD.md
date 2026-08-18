@@ -579,3 +579,11 @@ earth", configurable by dragging, without breaking the physics.
   second: the Earth turns; a day a second: the lunar day and the phases), and
   hotkeys are 1–3. The clock popover keeps its Now button (0). The EARTH
   magnifier range doubles to ×1–×20.
+- 2026-08-17 (cursor-anchored zoom): the wheel zooms about the point under
+  the mouse, not the view centre — user-reported. The direction under the
+  cursor is captured before each frame's eased fov step and the camera
+  re-aimed after it (closed form: the camera ray's vertical component is
+  az-free, so alt solves from D.y, then az from the horizontal pair), so the
+  grabbed point never slides during the ease. Cleared by drag/lookAt/keys,
+  which stay centre-anchored. Measured: 65°→1.8° at an off-centre pixel
+  drifts 9 px; the round trip back out drifts 0.5 px.
