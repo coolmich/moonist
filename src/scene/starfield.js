@@ -39,7 +39,7 @@ const STAR_VERT = /* glsl */ `
     // keeps constant surface brightness — so deep zoom lifts the stars
     // against the Milky Way texture, which is physically what a bigger
     // objective does. Zero at wide field; tied to zoom, never to the Sun.
-    vIntensity = clamp(0.075 * pow(10.0, -0.25 * (aMag - uMagBias - 2.0)), 0.0015, 4.0) * uDim;
+    vIntensity = clamp(0.10 * pow(10.0, -0.25 * (aMag - uMagBias - 2.0)), 0.002, 4.0) * uDim;
     vColor = aColor;
     gl_PointSize = sizeCss * uPixelRatio;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);

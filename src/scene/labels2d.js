@@ -13,7 +13,9 @@ const FONTS = {
   planet: { px: 12.5, weight: 600, color: [240, 215, 170], alpha: 0.95, caps: false, gap: 10 },
   star: { px: 11.5, weight: 500, color: [210, 218, 230], alpha: 0.9, caps: false, gap: 9 },
   const: { px: 11.5, weight: 500, color: [150, 170, 198], alpha: 0.85, caps: true, gap: 0 },
-  compass: { px: 11, weight: 700, color: [150, 172, 198], alpha: 0.95, caps: true, gap: 0 },
+  // Deliberately faint: navigation chrome you find when you look for it,
+  // never a feature of the sky.
+  compass: { px: 11, weight: 500, color: [150, 172, 198], alpha: 0.35, caps: true, gap: 0 },
 };
 const CENTERED = new Set(['const', 'compass']);
 

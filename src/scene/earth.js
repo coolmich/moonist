@@ -368,7 +368,9 @@ const BEAM_FRAG = /* glsl */ `
     // core keeps its gold instead of clipping to fluorescent-tube white.
     float across = pow(max(1.0 - x2, 0.0), 2.0) * (0.35 + 0.65 * exp(-6.0 * x2));
     float along = pow(max(1.0 - vXY.y, 0.0), 1.6);      // fades out toward the tip
-    float breathe = 0.86 + 0.14 * sin(uTime * 2.0);
+    // A slow, deep blink (~8 s period, down to a quarter brightness) — the
+    // find-me cue, by request gradual enough to read as breathing, not strobe.
+    float breathe = 0.62 + 0.38 * sin(uTime * 0.8);
     float i = across * along * breathe * globeVis(camO, vPos);
     // Floor on uBrightness so the beacon still reads through lunar night,
     // when the Earth's own exposure is nearly closed. Same floor the disc
@@ -419,7 +421,7 @@ const GLOW_FRAG = /* glsl */ `
   ${VIS_GLSL}
   void main() {
     vec3 camO = uViewDirBody * uViewDistBody;
-    float breathe = 0.86 + 0.14 * sin(uTime * 2.0);
+    float breathe = 0.62 + 0.38 * sin(uTime * 0.8); // in step with the shaft
     float r2 = dot(vXY, vXY);
     float i = pow(max(1.0 - r2, 0.0), 2.0) * breathe * globeVis(camO, vPos);
     // Warmer than the shaft so it still tints white clouds when home faces
