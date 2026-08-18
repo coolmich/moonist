@@ -1,0 +1,42 @@
+# Build and publish to GitHub Pages on every push to main. The base path is
+# derived from the repository name, so renaming the repo cannot break asset
+# URLs (they all resolve through src/assetUrl.js).
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The astronomy is checked, not asserted — a deploy that skips the
+      # Horizons cross-checks is not a deploy.
+      - run: npm test
+      - run: npm run build -- --base "/${{ github.event.repository.name }}/"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
