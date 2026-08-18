@@ -66,16 +66,17 @@ Earth all fit in a single frame.
 
 Drag to look around, wheel to zoom (0.2°–100° field of view — far enough in for Venus to
 show its crescent, Jupiter its belts, and Saturn its rings, tilted as they really are on
-today's date). One bar along the bottom holds everything: the site picker, the five
-time-lapse speeds, the clock (opens the date jump), Sky (the layer toggles and the
-`EARTH ×1–×10` slider, which magnifies the Earth's image alone — its face, phase and light
+today's date). One bar along the bottom holds everything: the site picker, the time controls — Real,
+`1s = 1h` (watch the Earth turn), `1s = 1d` (the lunar day and the phases) — the clock
+(opens the date jump, with Now to come back), Sky (the layer toggles and the
+`EARTH ×1–×20` slider, which magnifies the Earth's image alone — its face, phase and light
 stay real, and everything it is drawn over gets covered exactly as a magnifier's image
 would), Credits, and Hide. The status line top-left reads site · time · speed · next sun
 event; click it (or `D`) for the full readout. Hide (`H`) fades all of it for a pure sky —
 tap the sky, `Esc` or `H` brings it back, and every key keeps working while it is hidden.
 Two things never hide: a magnified Earth always shows its `EARTH ×N` chip, and warped time
-confesses itself top-right whenever the chrome that would show it is gone. Keys: `1`–`5`
-speed, `0` back to now, `C` constellations, `N` star and planet names, `E` snap to the
+confesses itself top-right whenever the chrome that would show it is gone. Keys: `1`–`3`
+time, `0` back to now, `C` constellations, `N` star and planet names, `E` snap to the
 Earth, `D` readout, `H` hide — the full list lives in the Credits sheet.
 
 Sky → My location plants a beacon on your own point of the Earth's disc (the browser asks

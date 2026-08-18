@@ -366,12 +366,15 @@ const STYLE = /* css */ `
   }
 `;
 
+// Two lapse rates, named as an equation of screen time to sim time — 'unit
+// per second' notation meant nothing until you tried it (user feedback), a
+// minute-per-second was too slow to see and a week-per-second too fast to
+// follow. An hour a second shows the Earth turn; a day a second shows the
+// lunar day and the Earth's phases.
 const SPEEDS = [
-  [1, 'Real', 'Real'],
-  [60, '1 min/s', '1m'],
-  [3600, '1 hr/s', '1h'],
-  [86400, '1 day/s', '1d'],
-  [604800, '1 wk/s', '1w'],
+  [1, 'Real', 'Real', 'Run the clock at real time'],
+  [3600, '1s = 1h', '1h', 'Time lapse: each real second is an hour — watch the Earth turn'],
+  [86400, '1s = 1d', '1d', "Time lapse: each real second is a day — the lunar day and the Earth's phases"],
 ];
 
 const CREDITS = [
@@ -625,12 +628,13 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   siteBtn.type = 'button';
   siteBtn.setAttribute('aria-haspopup', 'dialog');
   el('span', 'divider', dock);
-  const speedBtns = SPEEDS.map(([s, label, short]) => {
+  const speedBtns = SPEEDS.map(([s, label, short, why]) => {
     const b = el('button', 'btn', dock,
       `<span class="lab-w">${label}</span><span class="lab-n">${short}</span>`);
     b.type = 'button';
     b.setAttribute('aria-pressed', 'false');
     b.setAttribute('aria-label', label);
+    b.title = why;
     b.addEventListener('click', () => { clock.setSpeed(s); syncSpeed(); });
     return { s, b };
   });
@@ -859,7 +863,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   for (const [k, what] of [
     ['Drag or arrow keys', 'look around'],
     ['Scroll, + and −', 'zoom'],
-    ['1 – 5', 'time speed, Real to 1 wk/s'],
+    ['1 – 3', 'time: real, an hour a second, a day a second'],
     ['0', 'back to now'],
     ['E', 'find the Earth'],
     ['C, N', 'constellations, star and planet names'],

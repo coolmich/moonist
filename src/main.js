@@ -171,8 +171,8 @@ const CARDINALS = [
   ['N', 0], ['NE', 45], ['E', 90], ['SE', 135],
   ['S', 180], ['SW', 225], ['W', 270], ['NW', 315],
 ];
-const SPEEDS = { Digit1: 1, Digit2: 60, Digit3: 3600, Digit4: 86400, Digit5: 604800 };
-const SPEED_NAMES = { 1: 'Real time', 60: '1 min/s', 3600: '1 hr/s', 86400: '1 day/s', 604800: '1 wk/s' };
+const SPEEDS = { Digit1: 1, Digit2: 3600, Digit3: 86400 };
+const SPEED_NAMES = { 1: 'Real time', 3600: 'Time lapse: 1 s = 1 hour', 86400: 'Time lapse: 1 s = 1 day' };
 const LAYER_NAMES = { constellations: 'Constellations', starNames: 'Star names' };
 const toggles = { constellations: true, starNames: true };
 
@@ -249,7 +249,7 @@ let site = (() => {
 // choice, clamped and stored here so every consumer — the mesh, the label
 // clearance, the label occluder — agrees on one value. ×10 keeps the whole disc
 // above the skyline even at Grimaldi, where the Earth hangs lowest (~21°).
-const EARTH_SCALE_MAX = 10;
+const EARTH_SCALE_MAX = 20;
 let earthScale = (() => {
   try {
     const v = parseFloat(localStorage.getItem('moonist.earthScale'));

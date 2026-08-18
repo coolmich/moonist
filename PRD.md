@@ -570,3 +570,11 @@ earth", configurable by dragging, without breaking the physics.
   Earth pointer chip stays: navigation, not a name). The Milky Way toggle and
   the M key are gone: the band is sky content, not chrome — turning it off
   was turning off the sky.
+- 2026-08-17 (time controls + magnifier range): the five speeds collapse to
+  three — Real, 1s = 1h, 1s = 1d — after user feedback that unit-per-second
+  notation meant nothing untried, a minute a second was too slow to see
+  anything and a week a second too fast to follow. The labels are an equation
+  of screen time to sim time, the tooltips say what you will watch (an hour a
+  second: the Earth turns; a day a second: the lunar day and the phases), and
+  hotkeys are 1–3. The clock popover keeps its Now button (0). The EARTH
+  magnifier range doubles to ×1–×20.
