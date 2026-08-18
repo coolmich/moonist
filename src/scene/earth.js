@@ -375,7 +375,7 @@ const BEAM_FRAG = /* glsl */ `
     // Floor on uBrightness so the beacon still reads through lunar night,
     // when the Earth's own exposure is nearly closed. Same floor the disc
     // chrome has always used.
-    vec3 col = vec3(1.0, 0.84, 0.55) * i * max(uBrightness, 0.35) * 1.0;
+    vec3 col = vec3(1.0, 0.84, 0.55) * i * max(uBrightness, 0.35) * 0.5;
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -427,7 +427,7 @@ const GLOW_FRAG = /* glsl */ `
     // Warmer than the shaft so it still tints white clouds when home faces
     // the viewer head-on and the glow is all there is. Dim enough that foot
     // plus shaft root stay under clipping — stacked they read as a flash.
-    vec3 col = vec3(1.0, 0.8, 0.5) * i * max(uBrightness, 0.35) * 0.7;
+    vec3 col = vec3(1.0, 0.8, 0.5) * i * max(uBrightness, 0.35) * 0.35;
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
