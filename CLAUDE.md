@@ -56,6 +56,13 @@ product is and `PRD.md` for the requirements and the decision log.
   an ellipse next to a circle. It is identity at ×1 by construction, so the physical path is
   untouched. `discSquash()` is exported because the label clearance and the off-screen chip
   have to shrink with the disc — anything else that measures the drawn limb needs it too.
+- **The disc's image lives at the true viewpoint; its mesh at the drawn one.** The
+  magnified mesh is geometrically a closer Earth, so every Earth material carries both
+  viewer distances and converts between the viewpoints with `capRemapDir` — the globe's
+  picture forward (drawn → true), anything standing on the picture (the beacon) inverse.
+  A new material that samples or anchors on the disc without the remap is wrong only
+  under magnification, which is exactly when nobody checks. Identity at ×1 by
+  construction; JS twin `capRemap` is exported and pinned by `tests/magnifier.test.mjs`.
 - **Equirect UV derivatives come from the direction, not from `atan2`.** Differentiate the
   direction and chain-rule it (`src/scene/earth.js`); `atan2` jumps at the antimeridian and
   the obvious folded stand-in kinks at ±90°, which over-sharpens the mip in a band there.

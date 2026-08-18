@@ -348,10 +348,25 @@ earth", configurable by dragging, without breaking the physics.
   *occluder* is still an angular test at the magnified radius, so it suppresses labels in a
   band up to ~26 px wide outside the squashed limb at ×10 — it errs toward hiding, never
   toward a label landing on the Earth.
-- **Accepted, documented, not fixed**: the enlarged mesh is geometrically a *closer* Earth,
-  so the visible cap shrinks from 89.0° to 80.5° at ×10 — the outer ~1.4% of the true disc,
-  already foreshortened to invisibility at ×1, slips out of frame as the dial rises. A
-  shader ray-remap could restore it; not worth the risk to a verified shader. And dragging
+- **The cap remap (decided 2026-08-18, reversing an earlier "accepted, not fixed")**: the
+  enlarged mesh is geometrically a *closer* Earth, whose visible cap ends at acos(1/D) —
+  89.1° true but 80.7° at ×10 and 71.5° at ×20 — and whose perspective re-projects the
+  interior (a feature 45° off-centre drawn at 79% of the radius against the true 71.5%).
+  Left alone, that hid truly-visible geography behind the drawn rim: with the Moon 6–10°
+  up in a Seattle sky, Seattle sat at 80.9–83.2° off-centre — visible from every lunar
+  site, yet behind the ×10 rim, with only the beacon's tip protruding. That is the one
+  scenario where the residue answered "where is home" wrongly, so it went. `capRemap`
+  (earth.js, GLSL twin `capRemapDir`) now carries every fragment's surface point between
+  the drawn and true viewpoints, preserving the sight line's impact parameter, so the
+  drawn disc is exactly the ×1 projection scaled — a magnifier's image, which is what the
+  dial claims to be. The beacon anchors through the inverse map, the atmosphere arc's
+  sunlit gate through the forward one. It is the identity at ×1 by construction (the
+  asin(b) that made the naive form ill-conditioned at the limb cancels; the drawn limb
+  lands on the true limb because γ + α = 90° at tangency), and a home beyond the true cap
+  still maps behind the drawn cap, so genuinely hidden homes stay hidden with no branch.
+  Node tests: tests/magnifier.test.mjs (identity, limb-to-limb, round-trip,
+  impact-parameter preservation, monotonicity, the Seattle night as a regression, hidden
+  stays hidden). And dragging
   the slider while the Earth is off screen changes only the ×N label — the off-screen Earth
   chip, already visible in exactly that scenario, is the guidance to turn toward it.
 - **Honesty rule**: whenever the dial is not ×1, an `EARTH ×N` chip sits top-right in
@@ -363,7 +378,11 @@ earth", configurable by dragging, without breaking the physics.
   pointer fires only once the whole disc is off frame (near limb ~24 px past the edge at
   65°/×10) and never with a slab visible; the dock stays one row at 880–1024 px and across
   site changes; one arrow press ticks ×1.0 → ×1.1 with matching `aria-valuetext`; zero
-  console errors.
+  console errors. Cap remap verified on screen 2026-08-18 with Seattle 83.2° off-centre
+  (99.5% of the disc radius, Moon ~6° up in Seattle): beacon base rooted ON the rim at
+  ×10 and ×20 where it previously hid behind the drawn cap, the near-limb geography
+  sliver restored; a home at the sub-lunar antipode shows no beacon at any dial; ×1
+  unchanged; zero console errors.
 - Round disc verified against the analytic silhouette by reading back the framebuffer at
   100° FOV, 1400 × 910, full Earth so no terminator truncates the chord. Disc extents
   radial × tangential, measured against predicted: ×2 37 × 33 (38 × 34), ×4 71 × 67

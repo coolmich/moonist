@@ -71,6 +71,41 @@ export function discSquash(cosPhi, rhoRad, scale) {
 }
 
 /**
+ * The magnifier's cap remap. Display choice, not physics — see PRD.
+ *
+ * The enlarged mesh is geometrically a *closer* Earth: from D radii out the
+ * visible cap ends at acos(1/D), so raising the dial hides geography the true
+ * viewer can see, and re-projects the interior (a feature 45° off-centre sits
+ * at 79% of the drawn radius at x10 against the true 71.5%). The fix is to
+ * carry each surface point's off-axis angle between the two viewpoints so the
+ * drawn disc is exactly the x1 projection, scaled — what a magnifier's image
+ * is. A point at angle g from the disc axis, seen from distance d, subtends
+ * alpha = atan2(sin g, d - cos g) at the viewer and its sight line passes
+ * b = d sin(alpha) from the centre; the remap preserves b:
+ *
+ *   g_to = g_from + alpha_from - asin(b / d_to)
+ *
+ * In this form the ill-conditioned asin(b) of the naive derivation cancels,
+ * so it is numerically quiet at the limb; it is the identity when the
+ * distances agree (the dial at x1, by construction, like uWarp); the drawn
+ * limb lands exactly on the true limb (g + alpha = 90° at tangency); and a
+ * point beyond the true cap maps smoothly to behind the drawn cap, which is
+ * what keeps a genuinely hidden home beacon hidden. GLSL twin below
+ * (REMAP_GLSL); node tests in tests/magnifier.test.mjs.
+ *
+ * @param gammaRad  off-axis angle of the surface point, radians
+ * @param dFrom     viewer distance the angle is measured under, globe radii
+ * @param dTo       viewer distance to map it to, globe radii
+ */
+export function capRemap(gammaRad, dFrom, dTo) {
+  const s = Math.sin(gammaRad);
+  const c = Math.cos(gammaRad);
+  const aFrom = Math.atan2(s, dFrom - c);
+  const b = dFrom * Math.sin(aFrom);
+  return gammaRad + aFrom - Math.asin(Math.min(b / dTo, 1));
+}
+
+/**
  * Build the clip-space squash. `sr`/`su` are the disc direction's components
  * along the camera's right and up axes — the screen radius points that way.
  */
@@ -108,6 +143,23 @@ const VERT = /* glsl */ `
   }
 `;
 
+// GLSL twin of capRemap above (display, not physics — see that comment).
+// Carries a body-frame surface direction from the viewpoint at dFrom radii to
+// the one at dTo, preserving the projected disc-radius fraction, so the
+// magnified disc is the x1 projection scaled. Identity when dFrom == dTo.
+const REMAP_GLSL = /* glsl */ `
+  vec3 capRemapDir(vec3 n, vec3 axis, float dFrom, float dTo) {
+    float c = clamp(dot(n, axis), -1.0, 1.0);
+    vec3 t = n - axis * c;
+    float st = length(t);
+    if (st < 1e-6) return n; // on the disc axis: a fixed point of the remap
+    float aFrom = atan(st, dFrom - c);
+    float b = dFrom * sin(aFrom);
+    float g = atan(st, c) + aFrom - asin(min(b / dTo, 1.0));
+    return axis * cos(g) + (t / st) * sin(g);
+  }
+`;
+
 const FRAG = /* glsl */ `
   precision highp float;
   varying vec3 vObjDir;
@@ -120,9 +172,11 @@ const FRAG = /* glsl */ `
   uniform vec3 uMoonPosBody;
   uniform vec3 uViewDirBody;
   uniform float uViewDistBody;
+  uniform float uViewDistDrawn;
   uniform float uBrightness;
 
   const float PI = 3.14159265358979;
+  ${REMAP_GLSL}
   // Radii in Earth radii — the same numbers engine.js uses, whose
   // sunObscuration() is this code's node-tested twin.
   const float R_SUN_ER = 109.19793;
@@ -158,7 +212,12 @@ const FRAG = /* glsl */ `
   }
 
   void main() {
-    vec3 n = normalize(vObjDir);
+    // The mesh hands over its own surface point, which at xN belongs to a
+    // closer Earth; the remap swaps it for the point the TRUE viewer sees at
+    // this fraction of the disc radius. Everything downstream — geography,
+    // lighting, clouds, glint, eclipse — reads the remapped point, so the
+    // whole picture is the x1 projection scaled. Identity at x1.
+    vec3 n = capRemapDir(normalize(vObjDir), uViewDirBody, uViewDistDrawn, uViewDistBody);
     float lon = atan(n.y, n.x);            // east-positive, 0 at Greenwich
     float lat = asin(clamp(n.z, -1.0, 1.0));
     vec2 uv = vec2(lon / (2.0 * PI) + 0.5, lat / PI + 0.5);
@@ -215,9 +274,10 @@ const FRAG = /* glsl */ `
     vec3 cloudLit = vec3(1.0, 0.99, 0.97) * cloudAlb * diffuse;
     dayLit = mix(dayLit, cloudLit, cover);
 
-    // Ocean sun glint where it is not overcast. The viewer is not at infinity
-    // once the mesh is magnified (x10 puts it ~6 radii out), so use the true
-    // per-fragment view ray, not the disc-centre direction.
+    // Ocean sun glint where it is not overcast. n is the remapped (true)
+    // surface point, so pair it with the true viewer position; the viewer is
+    // still not at infinity even there (~60 radii), so use the per-fragment
+    // view ray, not the disc-centre direction.
     vec3 refl = reflect(-uSunDirBody, n);
     vec3 toView = normalize(uViewDirBody * uViewDistBody - n);
     float glint = pow(max(dot(refl, toView), 0.0), 140.0);
@@ -251,9 +311,11 @@ const ATMO_FRAG = /* glsl */ `
   uniform vec3 uSunDirBody;
   uniform vec3 uViewDirBody;
   uniform float uViewDistBody;
+  uniform float uViewDistTrue;
   uniform float uBrightness;
 
   const float SHELL = 1.016;   // ~100 km of atmosphere over a 6371 km Earth
+  ${REMAP_GLSL}
 
   void main() {
     vec3 n = normalize(vObjDir);
@@ -270,7 +332,11 @@ const ATMO_FRAG = /* glsl */ `
     // Below 1 the line of sight ends on the surface; above SHELL it never
     // entered the air. Between, it grazes — brightest just above the limb.
     float arc = smoothstep(0.998, 1.006, b) * (1.0 - smoothstep(1.0, SHELL, b));
-    float lit = smoothstep(-0.12, 0.25, dot(n, uSunDirBody));
+    // The disc under the arc carries remapped (true-viewpoint) geography, so
+    // the arc's sunlit extent must be judged at the same remapped point or
+    // its endpoints detach from the disc's terminator under magnification.
+    vec3 nT = capRemapDir(n, uViewDirBody, uViewDistBody, uViewDistTrue);
+    float lit = smoothstep(-0.12, 0.25, dot(nT, uSunDirBody));
     float a = arc * lit;
     vec3 col = vec3(0.30, 0.52, 1.0) * a * uBrightness * 1.7;
     gl_FragColor = vec4(col, a);
@@ -334,17 +400,23 @@ const BEAM_VERT = /* glsl */ `
   uniform vec3 uHomeDir;
   uniform vec3 uViewDirBody;
   uniform float uViewDistBody;
+  uniform float uViewDistTrue;
   varying vec2 vXY;
   varying vec3 vPos;
   const float LEN = 0.5;    // shaft length, globe radii
   const float WID = 0.014;  // shaft half-width, globe radii (~90 km: a filament)
+  ${REMAP_GLSL}
   void main() {
     vec3 camO = uViewDirBody * uViewDistBody;
-    vec3 base = uHomeDir;
+    // The disc's picture is remapped to the true viewpoint, so the beacon must
+    // stand on the drawn point that shows home — the inverse remap. At x1 this
+    // is uHomeDir itself.
+    vec3 home = capRemapDir(uHomeDir, uViewDirBody, uViewDistTrue, uViewDistBody);
+    vec3 base = home;
     vec3 toCam = normalize(camO - base);
-    vec3 side = cross(uHomeDir, toCam);
+    vec3 side = cross(home, toCam);
     side /= max(length(side), 1e-5);
-    vec3 pos = base + uHomeDir * (position.y * LEN) + side * (position.x * WID);
+    vec3 pos = base + home * (position.y * LEN) + side * (position.x * WID);
     vXY = position.xy;
     vPos = pos;
     gl_Position = uWarp * projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
@@ -387,15 +459,19 @@ const GLOW_VERT = /* glsl */ `
   uniform vec3 uHomeDir;
   uniform vec3 uViewDirBody;
   uniform float uViewDistBody;
+  uniform float uViewDistTrue;
   varying vec2 vXY;
   varying vec3 vPos;
   // Same half-width as the shaft, by decision: the foot is the shaft's root,
   // not a separate ball of light. Its only job is the end-on view, where the
   // cylindrical billboard foreshortens to nothing and this dot is the marker.
   const float R = 0.014;
+  ${REMAP_GLSL}
   void main() {
     vec3 camO = uViewDirBody * uViewDistBody;
-    vec3 toCam = normalize(camO - uHomeDir);
+    // Inverse remap, in step with the shaft (see BEAM_VERT).
+    vec3 home = capRemapDir(uHomeDir, uViewDirBody, uViewDistTrue, uViewDistBody);
+    vec3 toCam = normalize(camO - home);
     vec3 helper = abs(toCam.z) < 0.99 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
     vec3 rt = normalize(cross(toCam, helper));
     vec3 up = cross(rt, toCam);
@@ -403,7 +479,7 @@ const GLOW_VERT = /* glsl */ `
     // when the home point faces the viewer head-on, and decisively enough
     // that no fragment sits on the visibility boundary, where any motion of
     // the geometry makes the anti-aliased edge crawl.
-    vec3 pos = uHomeDir + toCam * 0.03 + (rt * position.x + up * position.y) * R;
+    vec3 pos = home + toCam * 0.03 + (rt * position.x + up * position.y) * R;
     vXY = position.xy;
     vPos = pos;
     gl_Position = uWarp * projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
@@ -463,6 +539,14 @@ export async function createEarth(renderer) {
   const emptyClouds = new THREE.DataTexture(new Uint8Array([255, 255, 255, 0]), 1, 1);
   emptyClouds.needsUpdate = true;
 
+  // Two viewer distances, in globe radii, shared across the disc's materials:
+  // the TRUE one (physics — the picture's projection) and the mesh AS DRAWN
+  // (the magnifier's closer viewpoint). Which one a shader names uViewDistBody
+  // depends on which geometry it must hug; each material carries the other
+  // under a second name so the cap remap can convert between the viewpoints.
+  const viewDistTrue = { value: 60.0 };
+  const viewDistDrawn = { value: 60.0 };
+
   const uniforms = {
     uDay: { value: day },
     uNight: { value: night },
@@ -472,7 +556,8 @@ export async function createEarth(renderer) {
     uSunPosBody: { value: new THREE.Vector3(23481, 0, 0) },
     uMoonPosBody: { value: new THREE.Vector3(60, 0, 0) },
     uViewDirBody: { value: new THREE.Vector3(1, 0, 0) },
-    uViewDistBody: { value: 60.0 }, // viewer distance in globe radii
+    uViewDistBody: viewDistTrue,
+    uViewDistDrawn: viewDistDrawn,
     uBrightness: { value: 1.0 },
     uWarp: { value: new THREE.Matrix4() },
   };
@@ -485,7 +570,8 @@ export async function createEarth(renderer) {
   const atmoUniforms = {
     uSunDirBody: uniforms.uSunDirBody,
     uViewDirBody: uniforms.uViewDirBody,
-    uViewDistBody: { value: 60.0 }, // NOT shared: tracks the mesh as drawn
+    uViewDistBody: viewDistDrawn, // the shell hugs the mesh as drawn
+    uViewDistTrue: viewDistTrue,  // for the lit-gate's cap remap
     uBrightness: uniforms.uBrightness,
     uWarp: uniforms.uWarp, // shared: the shell must squash with the globe
   };
@@ -511,7 +597,8 @@ export async function createEarth(renderer) {
   const beaconUniforms = {
     uHomeDir: { value: new THREE.Vector3(1, 0, 0) },
     uViewDirBody: uniforms.uViewDirBody,
-    uViewDistBody: atmoUniforms.uViewDistBody,
+    uViewDistBody: viewDistDrawn, // the beacon hugs the mesh as drawn
+    uViewDistTrue: viewDistTrue,  // for the anchor's inverse cap remap
     uBrightness: uniforms.uBrightness,
     uWarp: uniforms.uWarp, // shared: the beacon must squash with the globe
     uTime: { value: 0 },
@@ -647,17 +734,16 @@ export async function createEarth(renderer) {
       // computed FROM the Earth — earthshine, eclipse dimming, phase,
       // orientation, the ephemeris itself — keeps the true angular radius.
       const radius = EARTH_DIST * Math.sin(e.angRadiusDeg * displayScale * Math.PI / 180);
-      // Two viewer distances, in globe radii. The globe's picture content —
-      // which patch of ocean carries the glint — uses the TRUE geometry, so
-      // nothing on the disc can move with the display dial. The atmosphere
-      // arc instead must hug the limb of the mesh as drawn, and a x10
-      // magnification puts that mesh ~6 radii from the camera, not ~60.
-      // One accepted residue of the enlarged-mesh approach (see PRD): the
-      // visible cap is that of the closer viewpoint, so the outer ~1.4% of
-      // the true disc — already foreshortened to nothing at x1 — slips out
-      // of frame as the dial rises.
-      uniforms.uViewDistBody.value = 1 / Math.sin(e.angRadiusDeg * Math.PI / 180);
-      atmoUniforms.uViewDistBody.value = EARTH_DIST / radius;
+      // Two viewer distances, in globe radii. The globe's picture content
+      // uses the TRUE geometry; the atmosphere arc and the beacon hug the
+      // mesh as drawn, which a x10 magnification puts ~6 radii from the
+      // camera, not ~60. The fragment shaders convert between the two
+      // viewpoints with capRemap (see its comment), so the drawn disc is the
+      // x1 projection scaled — nothing on the disc moves with the display
+      // dial, and geography the true viewer can see never slips behind the
+      // enlarged mesh's closer horizon.
+      viewDistTrue.value = 1 / Math.sin(e.angRadiusDeg * Math.PI / 180);
+      viewDistDrawn.value = EARTH_DIST / radius;
       group.position.set(
         e.sceneDir[0] * EARTH_DIST,
         e.sceneDir[1] * EARTH_DIST,
