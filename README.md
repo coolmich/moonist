@@ -16,6 +16,9 @@ npm test         # astronomy + terrain assertions
 npm run build
 ```
 
+Live at **https://coolmich.github.io/moonist/** — every push to `main` redeploys via GitHub
+Actions (`.github/workflows/deploy.yml`); the test suite gates the deploy.
+
 ## What you are looking at
 
 **The Earth barely moves.** The Moon keeps one face toward the Earth, so from any near-side

@@ -79,6 +79,11 @@ product is and `PRD.md` for the requirements and the decision log.
   `make-milkyway.mjs` mirrors and flips it — and asserts the result before writing, because
   a mirrored sky still looks like a sky. `npm test` pins it against the IAU galactic frame.
 - **LOLA encoding**: `elevation_m = raw_uint16 * 0.5 - 10000`, relative to a 1737.4 km sphere.
+- **Runtime asset URLs go through `assetUrl()`** (`src/assetUrl.js`), never a bare
+  `'/textures/...'` string — the site deploys to a GitHub Pages subpath
+  (https://coolmich.github.io/moonist/, auto-deployed from main by
+  `.github/workflows/deploy.yml`), where root-absolute paths 404. The helper also keeps
+  scene modules importable by node tests, where Vite's env object does not exist.
 
 ## Layout
 
