@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assetUrl } from '../assetUrl.js';
 
 // Star dome: 5044 Hipparcos stars (mag ≤ 6) + constellation figures.
 // All geometry is built in EQJ (J2000 equatorial) coordinates; the whole
@@ -109,10 +110,10 @@ async function fetchJson(url) {
 
 export async function createStarfield(pixelRatio) {
   const [stars, lines, consts, starNames] = await Promise.all([
-    fetchJson('/data/stars.6.json'),
-    fetchJson('/data/constellations.lines.json'),
-    fetchJson('/data/constellations.json'),
-    fetchJson('/data/starnames.min.json'),
+    fetchJson(assetUrl('data/stars.6.json')),
+    fetchJson(assetUrl('data/constellations.lines.json')),
+    fetchJson(assetUrl('data/constellations.json')),
+    fetchJson(assetUrl('data/starnames.min.json')),
   ]);
 
   const group = new THREE.Group();
@@ -174,7 +175,7 @@ export async function createStarfield(pixelRatio) {
   };
   let deepPoints = null;
   function loadDeep() {
-    fetch('/data/deepstars.bin')
+    fetch(assetUrl('data/deepstars.bin'))
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.arrayBuffer();

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assetUrl } from '../assetUrl.js';
 import { createSurface, fbm, hashSeed, EYE } from './terrain-shape.js';
 
 // The ground: one continuous polar mesh centered on the observer, built from
@@ -14,11 +15,11 @@ const R_MAX = 65000;
 
 async function loadPatch(siteId) {
   const [meta, bin] = await Promise.all([
-    fetch(`/terrain/${siteId}.meta.json`).then((r) => {
+    fetch(assetUrl(`terrain/${siteId}.meta.json`)).then((r) => {
       if (!r.ok) throw new Error(`terrain meta for ${siteId}: HTTP ${r.status}`);
       return r.json();
     }),
-    fetch(`/terrain/${siteId}.bin`).then((r) => {
+    fetch(assetUrl(`terrain/${siteId}.bin`)).then((r) => {
       if (!r.ok) throw new Error(`terrain data for ${siteId}: HTTP ${r.status}`);
       return r.arrayBuffer();
     }),

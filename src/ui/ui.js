@@ -1,4 +1,5 @@
 import { SITES } from '../sites.js';
+import { assetUrl } from '../assetUrl.js';
 import { MIN_TIME, MAX_TIME } from '../sim/clock.js';
 
 // All chrome: readout, time controls, site picker, credits, orientation aids.
@@ -812,7 +813,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     // site's dot sits on the disc instead of overhanging the card background.
     const pin = moonPinXY(s.lat, s.lon);
     c.innerHTML =
-      `<span class="moonprev"><img src="/textures/moonface.webp" alt="">` +
+      `<span class="moonprev"><img src="${assetUrl('textures/moonface.webp')}" alt="">` +
       `<i class="pin" style="left:${(50 + pin.x * 47.5).toFixed(1)}%;top:${(50 - pin.y * 47.5).toFixed(1)}%"></i></span>` +
       `<span class="name">${s.name}</span>` +
       `<span class="earth" data-earth="${s.id}">—<small>Earth</small></span>` +

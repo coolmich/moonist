@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mulMV, transpose } from '../astro/vec.js';
+import { assetUrl } from '../assetUrl.js';
 
 // The Earth in the lunar sky. A shader sphere whose texture mapping is
 // computed from object-space direction (body frame: +x → 0°N/0°E, +y → 0°N/90°E,
@@ -12,7 +13,7 @@ import { mulMV, transpose } from '../astro/vec.js';
 
 const EARTH_DIST = 200000; // scene units; well inside the star dome
 const liveCloudsUrl = (w) => `https://clouds.matteason.co.uk/images/${w}x${w / 2}/clouds-alpha.png`;
-const FALLBACK_CLOUDS_URL = '/textures/clouds-fallback.png';
+const FALLBACK_CLOUDS_URL = assetUrl('textures/clouds-fallback.png');
 const CLOUD_REFRESH_MS = 3 * 3600 * 1000;
 // The source publishes the same map at 4096 and 8192 wide. The 8k is real
 // extra detail, not an upscale — box-downsampling it reproduces the 4k to a
@@ -446,9 +447,9 @@ export async function createEarth(renderer) {
   loader.setCrossOrigin('anonymous');
 
   const [day, night, spec] = await Promise.all([
-    loadTexture(loader, '/textures/earth-day.jpg'),
-    loadTexture(loader, '/textures/earth-night.jpg'),
-    loadTexture(loader, '/textures/earth-specular.png', { srgb: false }),
+    loadTexture(loader, assetUrl('textures/earth-day.jpg')),
+    loadTexture(loader, assetUrl('textures/earth-night.jpg')),
+    loadTexture(loader, assetUrl('textures/earth-specular.png'), { srgb: false }),
   ]);
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   // The equirect is stretched hardest exactly where the sight line is most

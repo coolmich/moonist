@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assetUrl } from '../assetUrl.js';
 
 // The Milky Way: the integrated light of the stars too faint to draw one by
 // one. The texture is NASA's Deep Star Maps 2020 resampled by
@@ -30,7 +31,7 @@ export const TEXTURE_GAIN = 3;
 const BRIGHTNESS = 1.0;
 
 const RADIUS = 940000; // beyond the star dome, inside the camera's far plane
-const URL = '/textures/milkyway.webp';
+const URL = assetUrl('textures/milkyway.webp');
 const FADE_MS = 700;
 
 const VERT = /* glsl */ `
