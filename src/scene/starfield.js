@@ -27,7 +27,7 @@ const STAR_VERT = /* glsl */ `
     // Magnitude → apparent radius: wide non-linear curve so the brightness
     // hierarchy survives (Sirius ~20 css px, mag 6 ~2 css px at 65° FOV;
     // the visible gaussian disc is ~0.85x the point-sprite size).
-    float sizeCss = clamp(13.0 * pow(0.74, aMag) * uZoom, 1.3, 46.0);
+    float sizeCss = clamp(13.0 * pow(0.74, aMag) * uZoom, 1.6, 46.0);
     vSpike = 1.0 - step(1.0, aMag); // diffraction spikes for mag < 1
     vSharp = mix(1.0, 3.4, vSpike);
     if (vSpike > 0.5) sizeCss *= 1.85;
@@ -39,7 +39,7 @@ const STAR_VERT = /* glsl */ `
     // keeps constant surface brightness — so deep zoom lifts the stars
     // against the Milky Way texture, which is physically what a bigger
     // objective does. Zero at wide field; tied to zoom, never to the Sun.
-    vIntensity = clamp(0.10 * pow(10.0, -0.25 * (aMag - uMagBias - 2.0)), 0.002, 4.0) * uDim;
+    vIntensity = clamp(0.15 * pow(10.0, -0.25 * (aMag - uMagBias - 2.0)), 0.003, 4.5) * uDim;
     vColor = aColor;
     gl_PointSize = sizeCss * uPixelRatio;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
