@@ -556,3 +556,17 @@ earth", configurable by dragging, without breaking the physics.
   the naked-eye frame — landmark-asserted before writing because a mirrored
   Moon still looks like a Moon; pin math node-tested the same way. View API
   gains home/setHome/setHomeOn/homeReturnHours. 48 tests green.
+- 2026-08-17 (public deploy + label/layer decisions): live at
+  coolmich.github.io/moonist via GitHub Pages, tests gating every push;
+  runtime asset URLs resolve through src/assetUrl.js because a Pages project
+  site lives under a subpath. Evening tweak round, all user-driven: star
+  points doubled in intensity with a 1.6 px sprite floor (a +33% first try
+  was imperceptible — cores clip, and visible radius grows with the log of
+  intensity); cardinal marks dropped to alpha 0.35/weight 500 — navigation
+  chrome, not sky; the home beacon blinks over ~8 s to a tenth of peak, at
+  half its original brightness. N now clears every name in the sky — stars,
+  planets, and the Earth's label — one switch for names, because a de-named
+  sky with named planets still reads as an annotated chart (the off-screen
+  Earth pointer chip stays: navigation, not a name). The Milky Way toggle and
+  the M key are gone: the band is sky content, not chrome — turning it off
+  was turning off the sky.

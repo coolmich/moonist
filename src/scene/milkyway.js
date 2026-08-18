@@ -147,8 +147,5 @@ export function createMilkyWay(renderer) {
       dim = v;
       applyIntensity();
     },
-    setVisible(v) {
-      mesh.visible = v;
-    },
   };
 }

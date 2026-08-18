@@ -75,7 +75,7 @@ event; click it (or `D`) for the full readout. Hide (`H`) fades all of it for a 
 tap the sky, `Esc` or `H` brings it back, and every key keeps working while it is hidden.
 Two things never hide: a magnified Earth always shows its `EARTH ×N` chip, and warped time
 confesses itself top-right whenever the chrome that would show it is gone. Keys: `1`–`5`
-speed, `0` back to now, `M` Milky Way, `C` constellations, `N` star names, `E` snap to the
+speed, `0` back to now, `C` constellations, `N` star and planet names, `E` snap to the
 Earth, `D` readout, `H` hide — the full list lives in the Credits sheet.
 
 Sky → My location plants a beacon on your own point of the Earth's disc (the browser asks

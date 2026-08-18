@@ -544,7 +544,6 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   const skyPop = makePop('ui-sky-pop', 'Sky display options');
   const layerBtns = {};
   for (const [key, label, kbd] of [
-    ['milkyWay', 'Milky Way', 'M'],
     ['constellations', 'Constellations', 'C'],
     ['starNames', 'Star names', 'N'],
   ]) {
@@ -863,7 +862,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
     ['1 – 5', 'time speed, Real to 1 wk/s'],
     ['0', 'back to now'],
     ['E', 'find the Earth'],
-    ['M, C, N', 'Milky Way, constellations, star names'],
+    ['C, N', 'constellations, star and planet names'],
     ['D', 'the full readout'],
     ['H', 'hide the interface'],
     ['Esc', 'close, then reveal'],

@@ -173,13 +173,12 @@ const CARDINALS = [
 ];
 const SPEEDS = { Digit1: 1, Digit2: 60, Digit3: 3600, Digit4: 86400, Digit5: 604800 };
 const SPEED_NAMES = { 1: 'Real time', 60: '1 min/s', 3600: '1 hr/s', 86400: '1 day/s', 604800: '1 wk/s' };
-const LAYER_NAMES = { milkyWay: 'Milky Way', constellations: 'Constellations', starNames: 'Star names' };
-const toggles = { milkyWay: true, constellations: true, starNames: true };
+const LAYER_NAMES = { constellations: 'Constellations', starNames: 'Star names' };
+const toggles = { constellations: true, starNames: true };
 
 function toggleLayer(key) {
   toggles[key] = !toggles[key];
   if (key === 'constellations') starfield?.showConstellations(toggles.constellations);
-  if (key === 'milkyWay') milkyway?.setVisible(toggles.milkyWay);
   return toggles[key];
 }
 
@@ -216,7 +215,7 @@ window.addEventListener('keydown', (e) => {
     ui?.setChromeHidden(false); // the drawer is chrome; reveal before opening
     ui?.toggleDetails();
   }
-  for (const [code, key] of [['KeyM', 'milkyWay'], ['KeyC', 'constellations'], ['KeyN', 'starNames']]) {
+  for (const [code, key] of [['KeyC', 'constellations'], ['KeyN', 'starNames']]) {
     if (e.code === code) {
       const on = toggleLayer(key);
       ui?.syncToggle(key, on);
@@ -322,8 +321,6 @@ async function boot() {
   earth = e;
   if (homeOn && home) earth.setHome(home.lat, home.lon);
   milkyway = createMilkyWay(renderer);
-  // The layer keys work before boot finishes, so adopt whatever state they left.
-  milkyway.setVisible(toggles.milkyWay);
   planets = createPlanets(renderer.getPixelRatio());
   sun = createSun();
   scene.add(milkyway.group);
@@ -656,7 +653,8 @@ function renderFrame() {
     );
     planets.updateApparentSizes(look.fov, heightPx);
     planets.setDim(starDim);
-    for (const p of state.planets) {
+    // Name labels ride one switch: N clears stars and planets alike.
+    if (toggles.starNames) for (const p of state.planets) {
       if (!aboveSkyline(p.sceneDir)) continue;
       const sizeCss = planets.sizePxOf(p.name);
       labelItems.push({
@@ -679,10 +677,10 @@ function renderFrame() {
     // width, the texels are what the eye is looking at and the finer map
     // earns its download.
     earth.requestDetail(2 * fPx * Math.tan(theta));
-    // Label the hero object whenever it is actually in view. (It is its own
-    // occluder, so test the skyline directly rather than via aboveSkyline.)
+    // Label the hero object whenever it is in view and names are on. (It is
+    // its own occluder, so test the skyline directly, not via aboveSkyline.)
     const eh = Math.hypot(state.earth.sceneDir[0], state.earth.sceneDir[2]);
-    if (Math.atan2(state.earth.sceneDir[1], eh) > horizonAlt(state.earth.sceneDir)) {
+    if (toggles.starNames && Math.atan2(state.earth.sceneDir[1], eh) > horizonAlt(state.earth.sceneDir)) {
       // Clearance radius that still encloses the disc off-axis, so the label
       // never lands on the Earth. The projection of a sphere seen at angle phi
       // from the view axis stretches outward to f·(tan(phi+theta) − tan(phi));
