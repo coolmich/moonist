@@ -560,9 +560,10 @@ earth", configurable by dragging, without breaking the physics.
   coolmich.github.io/moonist via GitHub Pages, tests gating every push;
   runtime asset URLs resolve through src/assetUrl.js because a Pages project
   site lives under a subpath. Evening tweak round, all user-driven: star
-  points doubled in intensity with a 1.6 px sprite floor (a +33% first try
-  was imperceptible — cores clip, and visible radius grows with the log of
-  intensity); cardinal marks dropped to alpha 0.35/weight 500 — navigation
+  points raised to 2.7x the original intensity with a 1.6 px sprite floor (a
+  +33% first try was imperceptible — cores clip, and visible radius grows
+  with the log of intensity), and the Milky Way's marked display constant
+  went 1.0 -> 1.5, core re-checked for blow-out at night; cardinal marks dropped to alpha 0.35/weight 500 — navigation
   chrome, not sky; the home beacon blinks over ~8 s to a tenth of peak, at
   half its original brightness. N now clears every name in the sky — stars,
   planets, and the Earth's label — one switch for names, because a de-named

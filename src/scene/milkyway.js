@@ -28,7 +28,9 @@ export const TEXTURE_GAIN = 3;
 // both. Set so the Sagittarius star cloud holds its structure instead of
 // blowing out at the top of the night exposure ramp, which is where a
 // too-bright band stops looking like a photograph and starts looking painted.
-const BRIGHTNESS = 1.0;
+// Raised 1.0 -> 1.5 on 2026-08-17 (user: band too dim); the Sagittarius core
+// was re-checked at full night exposure and still holds its structure.
+const BRIGHTNESS = 1.5;
 
 const RADIUS = 940000; // beyond the star dome, inside the camera's far plane
 const URL = assetUrl('textures/milkyway.webp');
