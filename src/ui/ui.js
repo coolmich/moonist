@@ -350,6 +350,26 @@ const STYLE = /* css */ `
     display: none;
   }
 
+  /* ---- idle translucency ---- */
+  /* The chrome recedes to a whisper while the pointer is elsewhere and
+     returns on hover or keyboard focus. Distinct from Hide: everything stays
+     readable at all times, so no honesty surface ever vanishes — and in
+     immersive mode the chips keep full strength (the #hud.immersive rules
+     above out-rank these on specificity). Hover-gated, so touch devices,
+     which cannot hover their way back, keep solid chrome. */
+  @media (hover: hover) {
+    #ui-dock, #ui-status, #ui-chips {
+      opacity: 0.45;
+      transition: opacity 200ms ease;
+    }
+    #ui-dock:hover, #ui-dock:focus-within,
+    #ui-status:hover, #ui-status:focus-within, #ui-status.open,
+    #ui-chips:hover,
+    #hud:has(.pop.open) #ui-dock {
+      opacity: 1;
+    }
+  }
+
   /* ---- touch overrides ---- */
   /* A 26px-tall control is fine under a cursor and hostile under a thumb —
      and the dismissal controls (modal close, "Got it") are the ones a phone

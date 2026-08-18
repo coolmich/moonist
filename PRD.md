@@ -579,11 +579,24 @@ earth", configurable by dragging, without breaking the physics.
   second: the Earth turns; a day a second: the lunar day and the phases), and
   hotkeys are 1–3. The clock popover keeps its Now button (0). The EARTH
   magnifier range doubles to ×1–×20.
-- 2026-08-17 (cursor-anchored zoom): the wheel zooms about the point under
-  the mouse, not the view centre — user-reported. The direction under the
-  cursor is captured before each frame's eased fov step and the camera
-  re-aimed after it (closed form: the camera ray's vertical component is
-  az-free, so alt solves from D.y, then az from the horizontal pair), so the
-  grabbed point never slides during the ease. Cleared by drag/lookAt/keys,
-  which stay centre-anchored. Measured: 65°→1.8° at an off-centre pixel
-  drifts 9 px; the round trip back out drifts 0.5 px.
+- 2026-08-17 (cursor zoom, two rounds): the wheel first pinned the pixel
+  under the mouse exactly (closed-form re-aim through the rectilinear
+  projection, 9 px drift over a 36x zoom) — and the user rejected it: with
+  the cursor near the edge the exact pin demands tan-scale swings and the
+  whole frame rotates and shears. Genre check: Stellarium wheel-zooms at the
+  view centre and offers zoom-in-on-SELECTED-object instead (cursor zoom is
+  a long-open feature request there). Final design is the compromise: each
+  frame of the eased fov step rotates the view centre toward the direction
+  under the cursor by the fraction the field shrank (slerp in angle space) —
+  in the small-angle limit that holds the pixel like a map, at wide field it
+  under-rotates so the pointed-at object drifts gently toward centre as the
+  zoom deepens, and zooming back out reverses it. Bounded rotation, no
+  shear; measured 59° of smooth sweep for a corner-cursor dive from 100°.
+  Cleared by drag/lookAt/keys, which stay centre-anchored.
+- 2026-08-17 (idle-translucent chrome): the dock, status capsule and chips
+  rest at opacity 0.45 and return to full on hover or keyboard focus
+  (focus-within), with the dock held solid while its popover is open. This
+  is dimming, not the auto-FADE rejected on 2026-08-17 — nothing vanishes,
+  every honesty surface stays readable at all times, and immersive mode's
+  full-strength chips out-rank the dim on specificity. Hover-gated
+  (@media hover) so touch devices keep solid chrome.

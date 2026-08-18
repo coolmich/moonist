@@ -115,20 +115,29 @@ function rayDir(clientX, clientY) {
   return { x: x / n, y: y / n, z: z / n };
 }
 
-// Re-aim so world direction D sits exactly under the given pixel at the
-// CURRENT fov. Closed form: the camera-ray's vertical component is az-free,
-// so alt solves first from D.y, then az from the horizontal pair.
-function aimThrough(clientX, clientY, D) {
-  const el = renderer.domElement;
-  const f = el.clientHeight / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
-  const ax = (clientX - el.clientWidth / 2) / f;
-  const ay = (el.clientHeight / 2 - clientY) / f;
-  const n = Math.hypot(ax, ay, 1);
-  const cra = ax / n, crb = ay / n, crf = 1 / n;
-  const alt = Math.asin(THREE.MathUtils.clamp(D.y / Math.hypot(crb, crf), -1, 1))
-    - Math.atan2(crb, crf);
-  const h = crf * Math.cos(alt) - crb * Math.sin(alt);
-  const az = Math.atan2(D.x, -D.z) - Math.atan2(cra, h);
+// Ease the view centre toward (zooming in) or back away from (zooming out)
+// the anchored direction, by the same fraction the field is changing. In the
+// small-angle limit this holds the point under the cursor exactly like a
+// map. At wide field it deliberately under-rotates: pinning the pixel
+// exactly through the rectilinear projection demands tan-scale swings that
+// shear the whole frame (tried — disorienting, and Stellarium avoids cursor
+// zoom entirely for this reason), so instead the pointed-at spot drifts
+// gently toward centre as the zoom deepens — the planetarium
+// zoom-in-on-target feel, reversible on the way back out.
+function zoomToward(D, f0, f1) {
+  const C = new THREE.Vector3(
+    Math.sin(look.az) * Math.cos(look.alt),
+    Math.sin(look.alt),
+    -Math.cos(look.az) * Math.cos(look.alt),
+  );
+  const T = new THREE.Vector3(D.x, D.y, D.z);
+  const axis = new THREE.Vector3().crossVectors(C, T);
+  const ang = Math.atan2(axis.length(), C.dot(T));
+  if (axis.lengthSq() < 1e-12 || ang < 1e-6) return;
+  axis.normalize();
+  C.applyAxisAngle(axis, (1 - f1 / f0) * ang);
+  const alt = Math.asin(THREE.MathUtils.clamp(C.y, -1, 1));
+  const az = Math.atan2(C.x, -C.z);
   // shortest way from where the camera already points, so az stays continuous
   look.az += Math.atan2(Math.sin(az - look.az), Math.cos(az - look.az));
   look.alt = THREE.MathUtils.clamp(alt, ALT_MIN, ALT_MAX);
@@ -626,12 +635,13 @@ function renderFrame() {
   const fovDelta = look.fovTarget - look.fov;
   if (fovDelta !== 0) {
     const D = zoomAnchor && !look.dragging ? rayDir(zoomAnchor.x, zoomAnchor.y) : null;
+    const f0 = look.fov;
     if (Math.abs(fovDelta) > 0.05) {
       look.fov += fovDelta * (1 - Math.exp(-dt / 0.11));
     } else {
       look.fov = look.fovTarget;
     }
-    if (D) aimThrough(zoomAnchor.x, zoomAnchor.y, D);
+    if (D) zoomToward(D, f0, look.fov);
   }
   applyLook(); // camera matrices must be current before label projection
 
