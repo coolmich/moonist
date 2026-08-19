@@ -265,6 +265,23 @@ const STYLE = /* css */ `
   #hud.immersive #ui-chips, #hud.immersive #ui-msg {
     opacity: 1; pointer-events: auto; visibility: visible; transition: none;
   }
+  /* ...except the magnifier chip. Hide means hide: the user asked three times,
+     and a mode called Hide that leaves a chip on screen is the mode lying, not
+     the sky. The magnifier is the user's own deliberate act and the dial still
+     reads x N the moment chrome returns, so nothing is being concealed from
+     the person who set it. Warped time keeps its exception: the clock can run
+     away on its own, where the magnifier never moves unless somebody moves it.
+
+     display:none, not visibility:hidden: the chip is a flex item of #ui-chips,
+     and #ui-chips is one of the nodes panelRects() still reports while chrome
+     is hidden (the warped-time chip lives there too). A merely invisible chip
+     keeps its 86 px box, so sky labels would go on dodging a rectangle with
+     nothing drawn in it — under Hide the label avoidance is supposed to get
+     the whole frame back. This beats .chip.on's display:flex on specificity,
+     so the chip returns intact on reveal. */
+  #hud.immersive #ui-earthchip {
+    display: none;
+  }
   /* The OSD keeps its .show gate — an unconditional override pinned every
      confirmation on screen for the whole hidden session — and stays
      click-through: a tap on the caption itself must still reveal. */
@@ -717,6 +734,7 @@ export function createUI({ hud, view, clock, toggles, onToggle, onSiteChange }) 
   const chips = el('div', 'ui', hud);
   chips.id = 'ui-chips';
   const earthChip = el('button', 'panel chip', chips);
+  earthChip.id = 'ui-earthchip';
   earthChip.type = 'button';
   earthChip.title = 'The Earth is drawn magnified — its face, phase and light stay real. Click to adjust.';
   earthChip.addEventListener('click', () => {

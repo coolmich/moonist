@@ -48,8 +48,12 @@ product is and `PRD.md` for the requirements and the decision log.
   nothing at 65° FOV, a visible offset between a disc and the label beside it at 4°.
 - **New chrome joins two lists or it misbehaves**: the node list in `panelRects()` (or sky
   labels slide under it), and — only if it must survive Hide — the `#hud.immersive`
-  exception selector. Everything else fades. The honesty chips (`EARTH ×N`, warped time) and
-  the error toast are the only survivors by design; honesty outranks immersion (PRD).
+  exception selector. Everything else fades. The survivors are the warped-time chip and the
+  error toast. `EARTH ×N` used to survive too and no longer does (2026-08-18, user asked
+  three times): Hide has to mean hide, and the magnifier is the user's own deliberate act
+  that the dial re-states the instant chrome returns. Warped time keeps its exception
+  because the clock can run away on its own; the magnifier never moves unless somebody
+  moves it.
 - **Every Earth mesh must carry `uWarp`.** The magnified disc is de-stretched by a
   clip-space squash applied in the Earth's vertex shader (`gl_Position = uWarp * ...`), which
   is what keeps it round off-axis; a new material on that group without the uniform renders

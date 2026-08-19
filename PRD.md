@@ -538,9 +538,10 @@ earth", configurable by dragging, without breaking the physics.
   query that deleted the date picker on phones is gone). Hide (H) fades all
   chrome; a clean tap on the sky, Esc, or H reveals; Esc never hides; hotkeys
   keep working while hidden with a transient OSD confirmation; the first two
-  hides teach the way back. Honesty outranks immersion: `EARTH ×N` shows
-  whenever magnified (chrome or no chrome), and a time chip confesses warped
-  time while chrome is hidden. Auto-fade (video-player idle hide) was
+  hides teach the way back. Honesty outranks immersion for the clock: a time
+  chip confesses warped time while chrome is hidden. `EARTH ×N` was in that
+  set and was REMOVED on 2026-08-18 — see the Hide reversal below.
+  Auto-fade (video-player idle hide) was
   considered and rejected for v1: both review judges wounded it — it strands
   cold visitors and fades the sunrise countdown exactly while it is being
   watched. Label avoidance gets empty rects while hidden, so sky labels use
@@ -681,6 +682,29 @@ wrong in a way only measurement caught.
 - **Held, at the user's explicit request:** the daytime sky keeps its stars. Nothing here
   touches the rule that no amount of sunlight dims a star.
 
+
+## Hide means hide: the EARTH x N chip reversal (2026-08-18)
+
+The original call was that `EARTH x N` survives Hide, on the grounds that a clean screenshot
+of a magnified Earth would otherwise present it as real. The user asked three times for it to
+go, and it goes.
+
+The original reasoning conflated two different risks. The clock can run away on its own — a
+warp left running, a date jumped days back — so its chip is genuinely protecting the user
+from a state they may have forgotten they are in. The magnifier cannot: it only ever moves
+because someone dragged the dial, it never drifts, and the dial reads x N again the moment
+chrome comes back. Guarding it inside Hide was protecting the user from their own deliberate
+act, and the cost was that a mode named Hide visibly did not hide, which is the interface
+lying about itself.
+
+Implementation: the chip carries `#ui-earthchip` and is excluded from the `#hud.immersive`
+survivor rule, with `display: none` rather than `visibility: hidden`. The distinction is not
+cosmetic: `#ui-chips` is one of the nodes `panelRects()` still reports while chrome is
+hidden (the warped-time chip lives in it), so a merely invisible chip keeps its 86 px box
+and sky labels go on dodging a rectangle with nothing drawn in it — the opposite of the
+stated rule that hidden chrome hands the whole frame back to label avoidance. Verified with
+the magnifier at x10: the chip reads `EARTH x10`, goes away under Hide with `earthScale`
+still 10, and returns intact on reveal.
 
 ## Two measurements taken at ship time (2026-08-19)
 
