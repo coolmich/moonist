@@ -32,6 +32,21 @@ export const TEXTURE_GAIN = 3;
 // was re-checked at full night exposure and still holds its structure.
 const BRIGHTNESS = 1.5;
 
+// A second display choice, marked as such. The band's colour is the data's --
+// the source EXR carries per-star B-V, so the dust really is redder than the
+// clouds behind it -- but almost none of it reaches the eye. Measured on
+// 2026-08-18: NASA source 0.194 mean saturation, our 8-bit encode 0.168, the
+// shipped webp 0.099. Chroma subsampling at quality 68 destroys 41% of what
+// survives the encode, and what is left is a grey band.
+//
+// The stretch is about luminance, so it moves no light around the sky -- the
+// per-cell luminance the test fixture pins is untouched by construction. It is
+// still a camera's answer rather than an eye's: at these levels human colour
+// vision has given up entirely and the honest scotopic view is grey, exactly
+// as the exposure ramp elsewhere in this project is a camera's answer. Set to
+// land near the colour of a long-exposure photograph of the same sky.
+const SATURATION = 2.4;
+
 const RADIUS = 940000; // beyond the star dome, inside the camera's far plane
 const URL = assetUrl('textures/milkyway.webp');
 const FADE_MS = 700;
@@ -49,6 +64,7 @@ const FRAG = /* glsl */ `
   varying vec3 vDir;
   uniform sampler2D uMap;
   uniform float uIntensity;
+  uniform float uSaturation;
 
   const float PI = 3.14159265358979;
 
@@ -83,6 +99,10 @@ const FRAG = /* glsl */ `
     vec3 radiance = (lod > 0.001
       ? textureLod(uMap, uv, lod).rgb
       : textureGrad(uMap, uv, dUVdx, dUVdy).rgb) * uIntensity;
+    // Stretch chroma about luminance (see SATURATION): luminance-preserving,
+    // so the band keeps the brightness distribution the data gives it.
+    float lum = dot(radiance, vec3(0.2126, 0.7152, 0.0722));
+    radiance = max(vec3(lum) + (radiance - vec3(lum)) * uSaturation, 0.0);
     gl_FragColor = vec4(radiance, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -98,6 +118,7 @@ export function createMilkyWay(renderer) {
   const uniforms = {
     uMap: { value: blank },
     uIntensity: { value: 0 },
+    uSaturation: { value: SATURATION },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,

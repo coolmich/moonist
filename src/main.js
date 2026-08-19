@@ -647,7 +647,7 @@ function renderFrame() {
 
   const state = skyState(clock.now(), site);
   latestState = state;
-  const { starDim, earthBrightness, uiDim } = lighting.update(state, dt);
+  const { starDim, bandDim, earthBrightness, uiDim } = lighting.update(state, dt);
   const heightPx = renderer.domElement.clientHeight;
 
   // Sky labels are hidden behind the terrain skyline (a 4.5 km massif must
@@ -660,15 +660,16 @@ function renderFrame() {
   const occluders = [];
   if (state.earth.alt > -3) {
     // The occluder matches the disc as drawn, magnification included.
-    occluders.push({ dir: state.earth.sceneDir, cosR: Math.cos(THREE.MathUtils.degToRad(state.earth.angRadiusDeg * earthScale)) });
+    occluders.push({ id: 'earth', dir: state.earth.sceneDir, cosR: Math.cos(THREE.MathUtils.degToRad(state.earth.angRadiusDeg * earthScale)) });
   }
   if (state.sun.alt > -3) {
-    occluders.push({ dir: state.sun.sceneDir, cosR: Math.cos(THREE.MathUtils.degToRad(state.sun.angRadiusDeg)) });
+    occluders.push({ id: 'sun', dir: state.sun.sceneDir, cosR: Math.cos(THREE.MathUtils.degToRad(state.sun.angRadiusDeg)) });
   }
-  const aboveSkyline = (dir) => {
+  const aboveSkyline = (dir, selfId) => {
     const h = Math.hypot(dir[0], dir[2]);
     if (Math.atan2(dir[1], h) <= horizonAlt(dir) + 0.004) return false;
     for (const o of occluders) {
+      if (o.id === selfId) continue;
       const d = dir[0] * o.dir[0] + dir[1] * o.dir[1] + dir[2] * o.dir[2];
       if (d > o.cosR) return false;
     }
@@ -677,7 +678,7 @@ function renderFrame() {
 
   if (milkyway) {
     milkyway.setOrientation(state.eqjToScene);
-    milkyway.setDim(starDim);
+    milkyway.setDim(bandDim);
   }
 
   const labelItems = [];
@@ -738,8 +739,10 @@ function renderFrame() {
     // width, the texels are what the eye is looking at and the finer map
     // earns its download.
     earth.requestDetail(2 * fPx * Math.tan(theta));
-    // Label the hero object whenever it is in view and names are on. (It is
-    // its own occluder, so test the skyline directly, not via aboveSkyline.)
+    // Label the hero object whenever it is in view and names are on. (Test
+    // the skyline directly rather than via aboveSkyline(ed, 'earth'): that
+    // would still hand the Sun's occluder a veto, and the nearer Earth is
+    // never actually behind the Sun's disc.)
     const eh = Math.hypot(state.earth.sceneDir[0], state.earth.sceneDir[2]);
     if (toggles.starNames && Math.atan2(state.earth.sceneDir[1], eh) > horizonAlt(state.earth.sceneDir)) {
       // Clearance radius that still encloses the disc off-axis, so the label
@@ -767,7 +770,25 @@ function renderFrame() {
       });
     }
   }
-  if (sun) sun.update(state);
+  if (sun) {
+    sun.updateApparentSizes(look.fov, heightPx);
+    sun.update(state);
+    // Name the Sun like the other discs. It is its own occluder, so it skips
+    // itself in the test; the Earth's entry still hides the label in eclipse.
+    // (That entry is a cone on the unsquashed magnified radius, so off-axis
+    // under magnification it only approximates the drawn limb.)
+    if (toggles.starNames && aboveSkyline(state.sun.sceneDir, 'sun')) {
+      const fPx = heightPx / (2 * Math.tan(THREE.MathUtils.degToRad(look.fov) / 2));
+      labelItems.push({
+        id: 'sun',
+        dir: state.sun.sceneDir,
+        text: 'Sun',
+        cls: 'planet',
+        priority: -18, // above every planet; the Earth (-20) wins a collision
+        clearPx: fPx * Math.tan(THREE.MathUtils.degToRad(state.sun.angRadiusDeg)) * 1.12 + 8,
+      });
+    }
+  }
   if (terrain) terrain.setSunDir(state.sun.sceneDir);
 
   // Cardinal marks ride on the local skyline so they read as part of the view.

@@ -9,19 +9,44 @@ import * as THREE from 'three';
 // sunlit surface dominates the frame.
 
 export function createLighting(scene, renderer) {
-  const sunLight = new THREE.DirectionalLight(0xfff6ec, 0);
+  // The Sun is the white point here. On Earth the light we call "sunlight" is
+  // already reddened by kilometres of air; in vacuum there is nothing to redden
+  // it, so tinting the lamp warm was importing an atmosphere the scene does not
+  // have. Measured 2026-08-18: the old 0xfff6ec lamp times the regolith tint
+  // put the sunlit ground at linear B/R 0.79 against 1.00 in real surface
+  // photography -- the entire beige cast, in two constants. The soil keeps its
+  // own mild red slope (terrain.js), which is where the colour is actually
+  // measured to live.
+  const sunLight = new THREE.DirectionalLight(0xffffff, 0);
   sunLight.castShadow = true;
-  // The shadow map covers the near field only (~0.15 m per texel), where
-  // crater rims and rocks cast the shadows that sell the surface. Beyond it,
-  // shading comes from surface normals alone.
+  // The shadow map covers the near field only, where crater rims and rocks cast
+  // the shadows that sell the surface; beyond it, shading comes from surface
+  // normals alone. At +/-150 m one texel was 0.15 m and a 30 cm block threw a
+  // two-texel smudge; +/-60 m puts a texel at 0.06 m, which is what makes the
+  // block field read as blocks.
   sunLight.shadow.mapSize.set(2048, 2048);
-  sunLight.shadow.camera.left = -150;
-  sunLight.shadow.camera.right = 150;
-  sunLight.shadow.camera.top = 150;
-  sunLight.shadow.camera.bottom = -150;
-  sunLight.shadow.camera.near = 1500;
-  sunLight.shadow.camera.far = 2600;
-  sunLight.shadow.bias = -0.0006;
+  sunLight.shadow.camera.left = -60;
+  sunLight.shadow.camera.right = 60;
+  sunLight.shadow.camera.top = 60;
+  sunLight.shadow.camera.bottom = -60;
+  // three.js adds shadowBias to a depth NORMALISED over near..far, so the same
+  // constant means whatever that span happens to be. Over the old 1100 m span,
+  // bias -0.0006 was a 0.66 m depth offset: every block shorter than two thirds
+  // of a metre was declared lit and its shadow vanished, which is most of the
+  // block field. Keep the span just wide enough for the +/-60 m box and its
+  // relief, and set the offset in metres that the span makes it mean.
+  //
+  // Measured after the change: it moves 0.06% of ground pixels and adds no
+  // acne. It is kept because the old value was wrong by 0.66 m and would bite
+  // the moment blocks or the shadow box change, not because it is visible --
+  // at a high Sun a sub-metre block's shadow is a few pixels long whatever the
+  // bias does, and at a low Sun the depth gap was already clearing 0.66 m.
+  sunLight.shadow.camera.near = 1900;
+  sunLight.shadow.camera.far = 2100;
+  sunLight.shadow.bias = -0.0001;        // 200 m span -> 2 cm
+  // Offset along the surface normal, in world units and independent of the
+  // span; this is what actually holds acne off at grazing sun.
+  sunLight.shadow.normalBias = 0.04;
   scene.add(sunLight);
   scene.add(sunLight.target);
 
@@ -30,7 +55,7 @@ export function createLighting(scene, renderer) {
   scene.add(earthLight.target);
 
   // Faint bounce light off the surrounding terrain.
-  const bounce = new THREE.AmbientLight(0xfff0e0, 0);
+  const bounce = new THREE.AmbientLight(0xfffaf4, 0);
   scene.add(bounce);
 
   const current = { exposure: 1 };
@@ -95,15 +120,30 @@ export function createLighting(scene, renderer) {
       // 24 stops, so this one shows both and marks the daylight with a small
       // deliberate dip rather than pretending the sky went out.
       const daylightDim = 1 - 0.3 * dayLoad;
+      // Stars get a lift once the Sun is down. A marked display choice: the sky
+      // does not actually brighten at night (that is the whole point of the
+      // skyHold below), so this is the camera opening up on the point sources
+      // the way a night exposure does, and it is why the day level is left
+      // exactly where it was -- the gain is 1 at full daylight by construction.
+      // It rides the same dayLoad ramp as the ground's exposure, so it comes in
+      // over the first few degrees of sunset rather than snapping on.
+      const NIGHT_STAR_GAIN = 1.8;
+      const starGain = 1 + (NIGHT_STAR_GAIN - 1) * (1 - dayLoad);
       // The exposure ramp exists for the ground: it opens through the night so
       // earthshine-lit regolith stays visible, and closes under the Sun. The sky
       // has no business riding either half of it — a fuller Earth cannot
       // brighten the Milky Way — so divide it back out and let the sky hold.
       const skyHold = NIGHT_BASE / E;
       return {
-        // Stars, planets and the Milky Way keep a steady brightness through the
-        // whole lunar day, dipping slightly while the Sun is up.
-        starDim: daylightDim * skyHold,
+        // Stars and planets keep a steady brightness through the whole lunar
+        // day, dipping while the Sun is up and lifting once it sets.
+        starDim: daylightDim * skyHold * starGain,
+        // The Milky Way does NOT take the night lift. Measured 2026-08-18
+        // against reference imagery, our band already sits brighter than the
+        // target (mean 26.5 against 23.8) while carrying less structure; the
+        // gap there is contrast, not level, and raising it would flatten the
+        // band further. Points get the lift, the band holds.
+        bandDim: daylightDim * skyHold,
         // The Earth IS exposure-compensated. Its true brightness against the
         // earthshine-lit ground is a ratio of order a million to one; holding
         // its appearance steady is a deliberate camera-like compromise so the

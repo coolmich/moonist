@@ -619,3 +619,86 @@ earth", configurable by dragging, without breaking the physics.
   every honesty surface stays readable at all times, and immersive mode's
   full-strength chips out-rank the dim on specificity. Hover-gated
   (@media hover) so touch devices keep solid chrome.
+
+## Ground and sky fidelity, measured against reference imagery (2026-08-18)
+
+The user supplied two reference frames from a lunar visualisation and asked for that
+standard: a daytime surface littered with blocks and craters, and a night sky with a
+structured, coloured Milky Way. Everything below was measured with a pixel reader against
+those frames rather than judged by eye, because the first reading of the complaint was
+wrong in a way only measurement caught.
+
+- **The night sky was never too bright.** Measured over the sky region: our background sits
+  at median luminance 1/255 against the reference's 4, and our star density is *higher*
+  (22.2k vs 18.2k local maxima per megapixel). The one real gap was colour — mean saturation
+  0.101 against 0.385. Dimming anything would have moved away from the target. The fix is
+  `SATURATION` in `milkyway.js`, a luminance-preserving chroma stretch; the same framing now
+  measures 0.200, and the galactic-centre view 0.478.
+- **Where the colour went.** NASA's source EXR carries 0.194 mean saturation, our 8-bit
+  encode 0.168, the shipped webp 0.099: `cwebp -q 68` throws away 41% of the chroma that
+  survives the encode. Alternatives were measured and rejected — 8k at q95 recovers it in
+  full but costs 10.7 MB against 2.0, 4k at q95 costs 2.26 MB for 0.139, and a chroma
+  pre-gain of x2 before encoding recovers 0.142 for +0.1 MB (kept on file as the cheap
+  option if the runtime stretch is ever judged to be doing too much work).
+- **The ground's deficit was contrast, not colour alone, and the cause was missing
+  geometry.** Reference ground spans luminance p10 9 to p90 199 (sd 74.4); ours spanned
+  128 to 143 (sd 6.1). The mean was already right — what was absent was cast shadow, and
+  every dark pixel in the reference is thrown by a rock. Hence `rocks.js`. After the block
+  field, micro-craters and the shadow-frustum tightening, sd is 14.8 at a 50° sun.
+- **The beige was two constants, not a material property.** A warm sunlight lamp
+  (`0xfff6ec`) times the soil tint gave linear B/R 0.79 where the reference measures 1.02.
+  In vacuum there is nothing to redden sunlight, so the lamp is now neutral and the soil
+  keeps its own mild red slope: B/R 0.95.
+- **A correct fix that changed almost nothing, recorded so it is not re-litigated.**
+  three.js adds `shadowBias` to a depth normalised over the shadow camera's near..far, so
+  our `-0.0006` over an 1100 m span meant a 0.66 m offset and every block shorter than that
+  was declared lit. Tightening the span to 200 m, dropping the bias to 2 cm and adding a
+  4 cm `normalBias` is the right configuration — but measured against the frame it moves
+  0.06% of ground pixels and adds no acne. At a high Sun a sub-metre block's shadow is a few
+  pixels long regardless, and at a low Sun the depth gap already cleared 0.66 m. Kept for
+  correctness, not for looks.
+- **Deliberately not done.** Photographic parity needs the near-field terrain itself, which
+  is flat to millimetres per vertex inside 5 m because the polar mesh's cell is
+  `0.035 * distance`. That means an LROC NAC-derived near-field DTM (~2-5 m/px against the
+  ~60 m/px LOLA patch we ship) or a denser near mesh, and a Lunar-Lambert/Hapke photometric
+  function in place of Lambert. Both are real projects; neither is a constant.
+- **Night star gain (2026-08-18, user request).** Stars and planets take a x1.8 lift once
+  the Sun is down, riding the same `dayLoad` ramp as the ground's exposure so it arrives over
+  the first few degrees of sunset rather than snapping on. It is 1 at full daylight by
+  construction, and a controlled A/B at a 69.8 degree Sun measured 0.011% of sky pixels
+  differing (max delta 4.9/255) -- the daytime level the user asked to keep is genuinely
+  untouched. Measured effect at night: 14% more stars cross visibility (11.8k -> 13.5k blobs
+  per megapixel), each brighter. The Milky Way deliberately does NOT take the lift (it now
+  reads `bandDim`), because the band already measures brighter than the reference and its
+  gap is contrast, not level.
+- **What the gain cannot fix.** Star blob size is unchanged: median 1 px2 with a 65% single
+  pixel share, against the reference's 3 px2 and 27%. Faint stars are floored at 1.6 *CSS*
+  px by the size law in `starfield.js`, so brightening them reveals more of them but cannot
+  widen any of them. Making the field read like the reference needs the point-spread work
+  (a device-pixel floor, or a fixed-width Moffat PSF with intensity carrying the magnitude
+  range), which would also lift the band's chroma, since the oversized achromatic sprite
+  wings of the bright stars are part of what greys it. Do that before re-judging SATURATION.
+- **Held, at the user's explicit request:** the daytime sky keeps its stars. Nothing here
+  touches the rule that no amount of sunlight dims a star.
+
+
+## Two measurements taken at ship time (2026-08-19)
+
+- **The fragment relief was being lit in the wrong space, and the craters are what exposed
+  it.** `normal = normalize(normal + bump)` predates this work, but `bump` is differenced in
+  world space while three's `normal` at that injection point is view space. While the only
+  carrier was isotropic grain the error was invisible — a rotated gradient field has the
+  same statistics — so it survived unnoticed; micro-craters have recognisable shape and made
+  it render, exact at due north and exactly negated at due south. Fixed with
+  `mat3(viewMatrix) * bump`. Measured by sampling one fixed ground point across ±28° of
+  camera heading with the Sun frozen due east, where Lambert shading must be view-invariant:
+  spread fell from 14.7% to 5.1%, the remainder being mip and AA.
+- **The crater cascade costs about three quarters of the terrain pass, and it was measured
+  rather than guessed.** Against a variant with `mnCraters` stubbed to zero, interleaved and
+  GPU-drained on an M5 Pro: at 1600x900 DPR2 the terrain pass goes 4.78 → 8.10 ms looking
+  level (+69%) and 7.43 → 13.12 ms looking down at -35° (+76%). Whole-frame cost at
+  2880x1800 with everything on is 10.4 ms median, so it is comfortable here and untested on
+  integrated graphics. The known cheap win, deliberately NOT taken as part of this change
+  because it deserves its own measured pass: the crater profile has a closed-form gradient,
+  so returning `vec3(h, dh/dx, dh/dz)` from one call would remove two thirds of the hashing
+  that the current h0/hx/hz finite differencing pays for.

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { SITES } from '../src/sites.js';
 import { createSurface, MOON_R, EYE } from '../src/scene/terrain-shape.js';
+import { createRocks } from '../src/scene/rocks.js';
 
 // These tests exercise the SAME shape module the renderer draws from, so a
 // flipped patch, a lost curvature term or an inflated procedural amplitude
@@ -169,4 +170,45 @@ test('each site has the skyline its description promises', () => {
   // exactly the mistake an earlier build made.)
   const tycho = skyline('tycho');
   assert.ok(tycho.peak > 8 && tycho.mean > 4, `tycho peak ${tycho.peak.toFixed(1)}° mean ${tycho.mean.toFixed(1)}°`);
+});
+
+test('the block field adds blocks, never terrain', () => {
+  // Rocks are real geometry rather than height field, so the skyline test above
+  // cannot see them, and the same rule still binds: nothing invented may stand
+  // above the real skyline as *terrain*. A block breaking the horizon is not
+  // itself wrong -- on a flat mare a 1.5 m rock at 200 m genuinely rises above
+  // a 2.4 km horizon, which is why Apollo surface frames show rocks against the
+  // sky. What would be wrong is a block that breaks it by more than its own
+  // angular size (floating, or silently scaled up), because that is relief the
+  // site does not have. So: pin the break against each block's own subtense.
+  for (const site of SITES) {
+    const { surface } = loadSite(site.id);
+    const eyeY = surface.surfaceAt(0, 0).y + EYE;
+    const rocks = createRocks(surface, 12345, site.rockAbundance ?? 1, site.albedo);
+    let worstExcess = -Infinity;
+    let tallest = 0;
+    let worstFloat = 0;
+    for (const inst of rocks.group.children) {
+      const m = inst.instanceMatrix.array;
+      for (let i = 0; i < inst.count; i++) {
+        const o = i * 16;
+        const x = m[o + 12], y = m[o + 13], z = m[o + 14];
+        const sy = Math.hypot(m[o + 4], m[o + 5], m[o + 6]); // vertical half-extent
+        const r = Math.hypot(x, z);
+        if (r < 0.5) continue;
+        tallest = Math.max(tallest, sy);
+        // Every block sits on the ground it was placed on, partly buried.
+        worstFloat = Math.max(worstFloat, y + sy - (surface.surfaceAt(x, z).y + sy));
+        const alt = Math.atan2(y + sy - eyeY, r);
+        const sky = surface.lolaSkylineAlt(Math.atan2(x, -z), eyeY);
+        const subtense = Math.atan2(sy, r);        // the block's own angular radius
+        worstExcess = Math.max(worstExcess, alt - sky - subtense);
+      }
+    }
+    assert.ok(worstExcess < 0.02,
+      `${site.id}: a block clears the skyline by ${(worstExcess * 180 / Math.PI).toFixed(2)}° `
+      + 'more than its own angular size -- that is invented relief, not a rock');
+    assert.ok(tallest < 2.6, `${site.id}: tallest block half-height ${tallest.toFixed(2)} m`);
+    assert.ok(worstFloat <= 0, `${site.id}: a block floats ${worstFloat.toFixed(3)} m above the surface`);
+  }
 });

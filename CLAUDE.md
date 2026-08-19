@@ -66,6 +66,18 @@ product is and `PRD.md` for the requirements and the decision log.
 - **Equirect UV derivatives come from the direction, not from `atan2`.** Differentiate the
   direction and chain-rule it (`src/scene/earth.js`); `atan2` jumps at the antimeridian and
   the obvious folded stand-in kinks at ±90°, which over-sharpens the mip in a band there.
+- **A fragment normal perturbation is added in VIEW space.** At
+  `#include <normal_fragment_begin>` three has just written `normal = normalize(vNormal)`,
+  and `vNormal` went through `normalMatrix` — so a slope differenced along world X and Z
+  (`vWorldPos`) must be rotated with `mat3(viewMatrix)` before the add, never added raw.
+  Use `viewMatrix`, not `normalMatrix`: three declares `normalMatrix` only in the *vertex*
+  prefix. Added raw, the relief is lit from a direction that turns with the camera — exact
+  at due north, exactly negated at due south, where craters render convex and disagree with
+  both the shadow map and the mesh cascade's own craters. The bug hid for as long as the
+  only carrier was isotropic grain (a rotated gradient field is statistically identical);
+  micro-craters have recognisable shape, which is what made it visible (2026-08-19).
+  Measured: with the same ground point sampled across ±28° of heading, view-dependence
+  fell from 14.7% to 5.1% (the remainder is mip and AA).
 - **Selenographic coordinates** are Mean-Earth/polar-axis frame, east-positive — the same
   frame LROC coordinates and Horizons' lunar topocentric output use.
 - **astronomy-engine gotchas**: `RotationAxis().ra` is in *sidereal hours* (multiply by 15),
@@ -97,6 +109,7 @@ product is and `PRD.md` for the requirements and the decision log.
 ```
 src/astro/     ephemeris core, pure math, no renderer imports (must stay node-testable)
 src/scene/     one module per rendered thing; each owns its material and update()
+               (rocks.js is the one exception: geometry only, owned by terrain.js)
 src/ui/        all chrome; talks to the app only through the `view` API in main.js
 src/sim/       simulation clock
 scripts/       one-off data extraction (terrain patches from NASA LOLA)
@@ -109,6 +122,39 @@ public/        textures, star catalogs, generated terrain patches
 the drawn disc, never anything physical) and `home/setHome/setHomeOn/homeReturnHours` (the
 viewer's home beacon on the Earth — a display light shaft, never physics) — the UI uses it, and so
 do automated browser checks. Keep it stable.
+
+- **Ground detail is a three-stage handoff, and each stage must stop where the next
+  begins.** The height-field crater cascade (`terrain-shape.js`) can only carry features
+  larger than the polar mesh's cell, `MESH_CELL * distance`; below that the fragment
+  micro-craters in `terrain.js` take over, fading in exactly as the mesh loses a size class;
+  below the *pixel* footprint (`fwidth`) even those cannot be shaded as relief, so what
+  survives is contrast, carried as albedo mottling. Widen any stage without narrowing its
+  neighbour and you get the same crater drawn twice; leave a gap and the ground goes glassy,
+  which is what it did before 2026-08-18.
+- **Rocks are geometry, never height field.** `src/scene/rocks.js` instances ~20k blocks
+  because the ground mesh cannot represent them: at `MESH_CELL` a 1 m block 30 m away spans
+  about one quad, so the height-field `boulders()` still in `terrain-shape.js` can only ever
+  be a soft lump — it was left in place and the two now overlap inside ~36 m, which is the
+  one known redundancy here. Sizes follow the measured lunar block size-frequency law
+  (N(>R) ~ R^-2.7) as octave classes; density is a single constant (`N_REF`) scaled by an
+  optional `site.rockAbundance`, which **no site currently sets** — every site takes the
+  `?? 1` default, so the dial is a hook, not a tuned per-site value. Blocks cluster onto
+  fresh crater rims via the surface's own
+  `rim` weight. `npm test` pins that a block never clears the LOLA skyline by more than its
+  own angular size — a block breaking the horizon is real (flat mare, 2.4 km horizon), a
+  block breaking it by more than it subtends is invented relief.
+- **The Sun is the white point; colour lives in the regolith.** There is no air to redden
+  the light, so the lamp is neutral `0xffffff`. A warm lamp (`0xfff6ec`) times the soil tint
+  put the sunlit ground at linear B/R 0.79 where real surface photography measures 1.02 —
+  the whole beige cast, in two constants. If the ground ever looks tan again, check the lamp
+  before touching the albedo.
+- **The Milky Way's colour is a marked display choice with a measured cause.** The band is
+  near-grey on screen because chroma dies in the pipeline: NASA source 0.194 mean
+  saturation, our 8-bit encode 0.168, the shipped webp 0.099 (measured 2026-08-18 — webp
+  chroma subsampling at quality 68 costs 41%). `SATURATION` in `milkyway.js` stretches chroma
+  about luminance, so it moves no light around the sky and the per-cell luminance fixture is
+  untouched by construction. Regenerating the texture at higher quality was measured and
+  rejected: q95 recovers the colour but costs 10.7 MB against 2.0.
 
 ## Regenerating data
 

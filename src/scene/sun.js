@@ -49,8 +49,13 @@ export function createSun() {
   group.add(glare);
   group.add(disc);
 
+  let pxPerRad = 700; // refreshed every frame via updateApparentSizes
+
   return {
     group,
+    updateApparentSizes(fovDeg, heightPx) {
+      pxPerRad = heightPx / (2 * Math.tan(fovDeg * Math.PI / 360));
+    },
     update(state) {
       const s = state.sun;
       group.position.set(
@@ -62,7 +67,18 @@ export function createSun() {
       disc.scale.setScalar(discR * 1.12); // slight pad for the soft edge
       // Eclipsed by the Earth: the corona-less disc dims and its glare dies.
       const open = 1 - state.eclipseFraction;
-      glare.scale.setScalar(discR * 9 * open);
+      // Display floor on the bloom, never the disc: stars and planets are
+      // magnitude-keyed blobs (starfield.js: 13*0.74^mag*zoom, capped 46 px),
+      // so at wide FOV the brightest of them would out-size the Sun's
+      // physically scaled glare — inverting the one brightness ranking the
+      // sky must never get wrong. Track that law's largest blob (Sirius) and
+      // keep the bloom's bright core (~0.3 of the sprite) 1.6x past it, so
+      // 1.6/0.3 = 5.3x the blob. Past ~18 deg FOV the physical 9x-disc glare
+      // is larger and the floor never engages.
+      const zoom = Math.min(Math.max(pxPerRad / 565, 0.85), 4);
+      const blobPx = Math.min(20.1 * zoom, 46);
+      const glareFloor = (5.3 * blobPx / pxPerRad) * SUN_DIST;
+      glare.scale.setScalar(Math.max(discR * 9, glareFloor) * open);
       disc.material.color.setScalar(60 * Math.max(open, 0.0));
       group.visible = s.alt > -1.2 && open > 0.001;
     },

@@ -7,7 +7,7 @@ import * as THREE from 'three';
 //
 // Item: { dir:[x,y,z] scene-frame unit vector, text, cls:'planet'|'star'|'const',
 //         priority (lower = keep first), clearPx (drawn radius the label must
-//         clear, planets and the Earth only) }
+//         clear, planets, the Earth and the Sun only) }
 
 const FONTS = {
   planet: { px: 12.5, weight: 600, color: [240, 215, 170], alpha: 0.95, caps: false, gap: 10 },
